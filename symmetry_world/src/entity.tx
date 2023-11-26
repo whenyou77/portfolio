@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<template>
+ <object name="Pittsburg" type="npc">
+  <properties>
+   <property name="place" value="mainland"/>
+   <property name="quote" value="I love lean"/>
+   <property name="vx" type="float" value="0"/>
+   <property name="vy" type="float" value="0"/>
+  </properties>
+  <point/>
+ </object>
+</template>

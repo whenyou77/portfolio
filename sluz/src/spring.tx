@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<template>
+ <object name="spring">
+  <properties>
+   <property name="angle" type="float" value="0"/>
+   <property name="strong" type="bool" value="false"/>
+   <property name="type" type="float" value="0"/>
+  </properties>
+  <point/>
+ </object>
+</template>

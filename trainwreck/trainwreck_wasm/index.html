@@ -1,0 +1,33 @@
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <title>TITLE</title>
+    <style>
+        html,
+        body,
+        canvas {
+            margin: 0px;
+            padding: 0px;
+            width: 994px;
+            height: 994px;
+            overflow: hidden;
+            position: absolute;
+            background: black;
+            z-index: 0;
+        }
+    </style>
+</head>
+
+<body>
+    
+    <!-- Minified and statically hosted version of https://github.com/not-fl3/macroquad/blob/master/js/mq_js_bundle.js -->
+    <div id="text-align:center">
+        <canvas id="glcanvas" tabindex='1'></canvas>
+        <script src="https://not-fl3.github.io/miniquad-samples/mq_js_bundle.js"></script>
+        <script>load(".\\trainwreck.wasm");</script> <!-- Your compiled wasm file -->
+    </div>
+    
+</body>
+
+</html>

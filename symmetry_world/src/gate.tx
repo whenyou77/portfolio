@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<template>
+ <object width="32" height="32">
+  <properties>
+   <property name="place" value="Mainland"/>
+   <property name="x" type="float" value="0"/>
+   <property name="y" type="float" value="0"/>
+  </properties>
+ </object>
+</template>

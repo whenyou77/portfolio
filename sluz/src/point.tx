@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<template>
+ <object>
+  <properties>
+   <property name="id" type="float" value="522"/>
+   <property name="order" type="float" value="0"/>
+   <property name="speed" type="float" value="4"/>
+   <property name="stop" type="float" value="0"/>
+  </properties>
+  <point/>
+ </object>
+</template>
