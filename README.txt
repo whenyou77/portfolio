@@ -24,5 +24,5 @@ Trainwreck: Projekt na Ryan Laley Spring Jam 2023. Gra, w której musisz nakiero
 Wykorzystano język Rust i bibliotekę Macroquad.
 
 Do edycji kodu wykorzystuję VSCodium. Gdy robię coś w Kotlinie, wykorzystuję IntelliJ IDEA.
-Do jego kompilacji wykorzystuję MinGW.
+Do kompilacji kodu wykorzystuję MinGW.
 Dobrze odnajduję się w terminalu Linux, korzystam z WSL.
