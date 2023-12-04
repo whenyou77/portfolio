@@ -17,7 +17,7 @@
 #
 # ****************************************************************************************
 
-import raylib, nim_tiled
+import raylib, raymath, nim_tiled
 
 # ----------------------------------------------------------------------------------------
 # Global Variables Definition
@@ -27,11 +27,21 @@ type
     title
     charaSelect
     gameplay
+    pause
     gameOver
     thxForPlaying
+  Thing = object of RootObj
+    pos: Vector2
+    size: Vector2
+  Actor = object of Thing
+    vel: Vector2
+    hp: int
+  Solid = object of Thing
+  Player = object of Actor
+  Wall = object of Solid
 const
-  screenWidth = 1600
-  screenHeight = 900
+  screenWidth = 960
+  screenHeight = 960
 
 var currentScreen = title
 var nextScreen = title
@@ -42,6 +52,10 @@ var fadeInLen = 60
 var fadeOutLen = 60
 var transitioning = false
 
+var players: seq[Player] = @[]
+var walls: seq[Wall] = @[]
+
+# function to activate transition
 proc transition(transitionTo:Screen,lengthIn:int,lengthOut:int) =
   if not transitioning:
     transitioning = true
@@ -58,10 +72,33 @@ proc transition(transitionTo:Screen,lengthIn:int,lengthOut:int) =
 proc updateDrawFrame {.cdecl.} =
   # Update
   # --------------------------------------------------------------------------------------
-  # TODO: Update your variables here
   
-  if currentScreen == title and isKeyPressed(Enter): transition(gameplay,30,30)
-  if currentScreen == gameplay and isKeyPressed(Backspace): transition(title,30,30)
+  # Game logic
+  case currentScreen:
+    of gameplay:
+      for i,p in players.mpairs:
+        if i == 0:
+          if isKeyDown(D):
+            p.vel.x = 4.0
+          elif isKeyDown(A):
+            p.vel.x = -4.0
+          else:
+            p.vel.x = 0.0
+          if isKeyDown(S):
+            p.vel.y = 4.0
+          elif isKeyDown(W):
+            p.vel.y = -4.0
+          else:
+            p.vel.y = 0.0
+        p.pos += p.vel
+      if isKeyPressed(Enter): currentScreen = pause
+    of pause:
+      if isKeyPressed(Enter): currentScreen = gameplay
+      if isKeyPressed(Backspace): transition(title,30,30)
+    else: 
+      if isKeyPressed(Enter): transition(gameplay,30,30)
+
+  # Transition effect
   if transitioning:
     fadeTimer -= 1
     fadeAlpha = 255.0*((fadeInLen-fadeTimer)/fadeInLen)
@@ -70,10 +107,15 @@ proc updateDrawFrame {.cdecl.} =
       if fadeTimer == 0: 
         transitioning = false
     elif fadeTimer == 0: 
+      # switch to next screen, start fading out
       fadeOut = true
       fadeTimer=fadeOutLen
       currentScreen = nextScreen
-    echo fadeTimer
+      if currentScreen == gameplay:
+        players.add(Player(pos:Vector2(x:64.0,y:64.0),size:Vector2(x:32.0,y:32.0),vel:Vector2(),hp:1))
+      if currentScreen == title:
+        for _ in 0..players.len()-1:
+          players.del(0)
 
   # --------------------------------------------------------------------------------------
   # Draw
@@ -81,10 +123,16 @@ proc updateDrawFrame {.cdecl.} =
   beginDrawing()
   clearBackground(RayWhite)
   if currentScreen == title: drawText("Welcome! Press Enter to continue!", 380, 400, 40, LightGray)
-  if currentScreen == gameplay: 
-    drawText("*Blows up pancakes with mind*\n\n\nPress Backspace to return.", 380, 400, 40, LightGray)
-    
-  drawRectangle(0,0,screenWidth,screenHeight,Color(r:0,g:0,b:0,a:fadeAlpha.uint8))
+  # don't want to repeat the same code for rendering gameplay in pause screen
+  elif currentScreen == gameplay or currentScreen == pause: 
+    drawText("*Blows up pancakes with mind*\n\n\nPress Enter to open the pause screen.", 380, 400, 40, LightGray)
+    for i,p in players.pairs:
+      drawRectangle(p.pos,p.size,Green)
+  # pause screen
+  if currentScreen == pause:
+    drawRectangle(0,0,screenWidth,screenHeight,Color(r:0,g:0,b:0,a:96))
+    drawText("PAUSED.\nPress Backspace to return to title.\nPress Enter to get back into gameplay.",10,10,20,White)
+  drawRectangle(0,0,screenWidth,screenHeight,Color(r:0,g:0,b:0,a:fadeAlpha.uint8)) # transition rectangle
   endDrawing()
   # --------------------------------------------------------------------------------------
 
