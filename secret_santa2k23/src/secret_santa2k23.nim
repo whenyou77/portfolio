@@ -17,7 +17,7 @@
 #
 # ****************************************************************************************
 
-import raylib, raymath, nim_tiled
+import raylib, raymath, reasings, nim_tiled
 
 # ----------------------------------------------------------------------------------------
 # Global Variables Definition
@@ -52,7 +52,7 @@ var fadeInLen = 60
 var fadeOutLen = 60
 var transitioning = false
 
-var players: seq[Player] = @[]
+var players: array[4,Player]
 var walls: seq[Wall] = @[]
 
 # function to activate transition
@@ -112,20 +112,17 @@ proc updateDrawFrame {.cdecl.} =
       fadeTimer=fadeOutLen
       currentScreen = nextScreen
       if currentScreen == gameplay:
-        players.add(Player(pos:Vector2(x:64.0,y:64.0),size:Vector2(x:32.0,y:32.0),vel:Vector2(),hp:1))
-      if currentScreen == title:
-        for _ in 0..players.len()-1:
-          players.del(0)
+        players[0] = Player(pos:Vector2(x:64.0,y:64.0),size:Vector2(x:32.0,y:32.0),vel:Vector2(),hp:1)
 
   # --------------------------------------------------------------------------------------
   # Draw
   # --------------------------------------------------------------------------------------
   beginDrawing()
   clearBackground(RayWhite)
-  if currentScreen == title: drawText("Welcome! Press Enter to continue!", 380, 400, 40, LightGray)
+  if currentScreen == title: drawText("Welcome! Press Enter to continue!", 20, screenHeight-60, 40, LightGray)
   # don't want to repeat the same code for rendering gameplay in pause screen
   elif currentScreen == gameplay or currentScreen == pause: 
-    drawText("*Blows up pancakes with mind*\n\n\nPress Enter to open the pause screen.", 380, 400, 40, LightGray)
+    drawText("*Blows up pancakes with mind*\n\n\nPress Enter to open the pause screen.", 20, screenHeight-100, 40, LightGray)
     for i,p in players.pairs:
       drawRectangle(p.pos,p.size,Green)
   # pause screen
