@@ -17,7 +17,7 @@
 #
 # ****************************************************************************************
 
-import raylib, raymath, reasings, nim_tiled
+import raylib, raymath, reasings, nim_tiled, std/math
 
 # ----------------------------------------------------------------------------------------
 # Global Variables Definition
@@ -78,18 +78,32 @@ proc updateDrawFrame {.cdecl.} =
     of gameplay:
       for i,p in players.mpairs:
         if i == 0:
-          if isKeyDown(D):
-            p.vel.x = 4.0
-          elif isKeyDown(A):
-            p.vel.x = -4.0
+          if isKeyDown(D) or isKeyDown(Right):
+            if p.vel.x < 8.0: p.vel.x += 0.5
+          elif isKeyDown(A) or isKeyDown(Left):
+            if p.vel.x > -8.0: p.vel.x -= 0.5
           else:
-            p.vel.x = 0.0
-          if isKeyDown(S):
-            p.vel.y = 4.0
-          elif isKeyDown(W):
-            p.vel.y = -4.0
+            if p.vel.x > 0.0: 
+              p.vel.x -= 0.3
+              if p.vel.x < 0.0:
+                p.vel.x = 0.0
+            elif p.vel.x < 0.0: 
+              p.vel.x += 0.3
+              if p.vel.x > 0.0:
+                p.vel.x = 0.0
+          if isKeyDown(S) or isKeyDown(Down):
+            if p.vel.y < 8.0: p.vel.y += 0.5
+          elif isKeyDown(W) or isKeyDown(Up):
+            if p.vel.y > -8.0: p.vel.y -= 0.5
           else:
-            p.vel.y = 0.0
+            if p.vel.y > 0.0: 
+              p.vel.y -= 0.3
+              if p.vel.y < 0.0:
+                p.vel.y = 0.0
+            elif p.vel.y < 0.0: 
+              p.vel.y += 0.3
+              if p.vel.y > 0.0:
+                p.vel.y = 0.0
         p.pos += p.vel
       if isKeyPressed(Enter): currentScreen = pause
     of pause:
