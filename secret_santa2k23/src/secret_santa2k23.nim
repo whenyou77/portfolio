@@ -38,6 +38,7 @@ type
     hp: int
   Solid = object of Thing
   Player = object of Actor
+    att_cooldown: int
   Wall = object of Solid
 const
   screenWidth = 960
@@ -54,6 +55,8 @@ var transitioning = false
 
 var players: array[4,Player]
 var walls: seq[Wall] = @[]
+
+var camera = Camera2D(zoom:1.0)
 
 # function to activate transition
 proc transition(transitionTo:Screen,lengthIn:int,lengthOut:int) =
@@ -77,6 +80,7 @@ proc updateDrawFrame {.cdecl.} =
   case currentScreen:
     of gameplay:
       for i,p in players.mpairs:
+        if p.att_cooldown > 0: p.att_cooldown -= 1
         if i == 0:
           if isKeyDown(D) or isKeyDown(Right):
             if p.vel.x < 8.0: p.vel.x += 0.5
@@ -104,7 +108,9 @@ proc updateDrawFrame {.cdecl.} =
               p.vel.y += 0.3
               if p.vel.y > 0.0:
                 p.vel.y = 0.0
+          if isMouseButtonPressed(MouseButton.Left): p.att_cooldown = 60
         p.pos += p.vel
+      camera.offset = Vector2(x: screenWidth/2.0-players[0].pos.x, y: screenHeight/2.0-players[0].pos.y)
       if isKeyPressed(Enter): currentScreen = pause
     of pause:
       if isKeyPressed(Enter): currentScreen = gameplay
@@ -125,13 +131,15 @@ proc updateDrawFrame {.cdecl.} =
       fadeOut = true
       fadeTimer=fadeOutLen
       currentScreen = nextScreen
-      if currentScreen == gameplay:
-        players[0] = Player(pos:Vector2(x:64.0,y:64.0),size:Vector2(x:32.0,y:32.0),vel:Vector2(),hp:1)
+      case currentScreen:
+        of gameplay: players[0] = Player(pos:Vector2(x:64.0,y:64.0),size:Vector2(x:32.0,y:32.0),vel:Vector2(),hp:1,att_cooldown:0)
+        else: camera.offset = Vector2(x: 0.0, y: 0.0)    
 
   # --------------------------------------------------------------------------------------
   # Draw
   # --------------------------------------------------------------------------------------
   beginDrawing()
+  beginMode2D(camera)
   clearBackground(RayWhite)
   if currentScreen == title: drawText("Welcome! Press Enter to continue!", 20, screenHeight-60, 40, LightGray)
   # don't want to repeat the same code for rendering gameplay in pause screen
@@ -139,6 +147,7 @@ proc updateDrawFrame {.cdecl.} =
     drawText("*Blows up pancakes with mind*\n\n\nPress Enter to open the pause screen.", 20, screenHeight-100, 40, LightGray)
     for i,p in players.pairs:
       drawRectangle(p.pos,p.size,Green)
+  endMode2D()
   # pause screen
   if currentScreen == pause:
     drawRectangle(0,0,screenWidth,screenHeight,Color(r:0,g:0,b:0,a:96))
