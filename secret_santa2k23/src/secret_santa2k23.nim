@@ -95,7 +95,7 @@ proc updateDrawFrame {.cdecl.} =
         if i == 0:
           if isKeyDown(D) or isKeyDown(Right):
             if p.vel.x < 0.5: p.vel.x += 0.075
-          elif isKeyDown(A) or isKeyDown(Left):
+          elif isKeyDown(W) or isKeyDown(Left):
             if p.vel.x > -0.5: p.vel.x -= 0.075
           else:
             if p.vel.x > 0.0: 
@@ -108,7 +108,7 @@ proc updateDrawFrame {.cdecl.} =
                 p.vel.x = 0.0
           if isKeyDown(S) or isKeyDown(Down):
             if p.vel.z < 0.5: p.vel.z += 0.075
-          elif isKeyDown(W) or isKeyDown(Up):
+          elif isKeyDown(KeyboardKey.E) or isKeyDown(Up):
             if p.vel.z > -0.5: p.vel.z -= 0.075
           else:
             if p.vel.z > 0.0: 
@@ -168,6 +168,8 @@ proc updateDrawFrame {.cdecl.} =
       #drawRectangle(p.pos,p.size,Green)
       drawCube(p.pos,p.size,Green)
       drawModel(level, Vector3(x:0.0,y:0.0,z:0.0),4.0,White)
+      let groundpos = 0.0 # shadow's y (ground height)
+      drawCircle3D(Vector3(x:p.pos.x,y:0.1,z:p.pos.z),2.0-(p.pos.y-groundpos)/10.0,Vector3(x:1.0),90.0,Black)
       #drawGrid(1000,2.0)
     endMode3D()
   # pause screen
