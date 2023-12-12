@@ -44,6 +44,7 @@ type
 const
   screenWidth = 960
   screenHeight = 960
+  cameraZoom = 56.0 # how far is the camera from the player? Base: 56
 
 var currentScreen = title
 var nextScreen = title
@@ -55,7 +56,7 @@ var fadeOutLen = 60
 var transitioning = false
 
 var players: array[4,Player]
-var walls: seq[Wall] = @[]
+var walls: seq[Wall] = @[Wall(pos:Vector3(x: -4.0,y:4.0,z: 4.0),size:Vector3(x: 8.0,y:8.0,z: 8.0))]
 var level: Model
 
 var camera = Camera(
@@ -75,6 +76,18 @@ proc transition(transitionTo:Screen,lengthIn:int,lengthOut:int) =
     fadeInLen = lengthIn
     fadeTimer = lengthIn
     fadeOutLen = lengthOut
+
+proc aabbcc*(x1: float, y1: float, z1: float, w1: float, h1: float, d1: float,
+x2: float, y2: float, z2: float, w2: float, h2: float, d2: float): bool =
+  if
+    x1-w1/2.0 < x2 + w2/2.0 and
+    x1 + w1/2.0 > x2 - w2/2.0 and
+    y1-h1/2.0 < y2 + h2/2.0 and
+    h1/2.0 + y1 > y2-h2/2.0 and
+    z1-d1/2.0 < z2 + d2/2.0 and
+    d1/2.0 + z1 > z2-d2/2.0:
+      return true
+  false
 
 # ----------------------------------------------------------------------------------------
 # Module functions Definition
@@ -123,13 +136,39 @@ proc updateDrawFrame {.cdecl.} =
           if isMouseButtonPressed(MouseButton.Left) and p.att_cooldown == 0: p.att_cooldown = 60
         p.grounded = false
         p.pos.x += p.vel.x
+        for w in walls:
+          if aabbcc(p.pos.x,p.pos.z,p.pos.y,p.size.x,p.size.z,p.size.y,w.pos.x,w.pos.z,w.pos.y,w.size.x,w.size.z,w.size.y):
+            if p.pos.x > w.pos.x:
+              p.pos.x = w.pos.x+w.size.x/2.0+p.size.x/2.0
+            else:
+              p.pos.x = w.pos.x-w.size.x/2.0-p.size.x/2.0
+            p.vel.x = 0.0
+            echo "collision"
         p.pos.z += p.vel.z
+        for w in walls:
+          if aabbcc(p.pos.x,p.pos.z,p.pos.y,p.size.x,p.size.z,p.size.y,w.pos.x,w.pos.z,w.pos.y,w.size.x,w.size.z,w.size.y):
+            if p.pos.z > w.pos.z:
+              p.pos.z = w.pos.z+w.size.z/2.0+p.size.z/2.0
+            else:
+              p.pos.z = w.pos.z-w.size.z/2.0-p.size.z/2.0
+            echo "collision"
+            p.vel.z = 0.0
         p.pos.y += p.vel.y
-        if p.pos.y < 1.0: 
-          p.pos.y = 1.0
+        for w in walls:
+          if aabbcc(p.pos.x,p.pos.z,p.pos.y,p.size.x,p.size.z,p.size.y,w.pos.x,w.pos.z,w.pos.y,w.size.x,w.size.z,w.size.y):
+            if p.pos.y > w.pos.y:
+              p.pos.y = w.pos.y+w.size.y/2.0+p.size.y/2.0
+              p.vel.y = 0.0
+              p.grounded = true
+            else:
+              p.pos.y = w.pos.y-w.size.y/2.0-p.size.y/2.0
+            echo "collision"
+        echo p.pos.x, p.pos.z
+        if p.pos.y < p.size.y/2.0: 
+          p.pos.y = p.size.y/2.0
           p.vel.y = 0.0
           p.grounded = true
-      camera.position = players[0].pos + Vector3(x:56,y:56,z:56)
+      camera.position = players[0].pos + Vector3(x:cameraZoom,y:cameraZoom,z:cameraZoom)
       camera.target = players[0].pos
       if isKeyPressed(Enter): currentScreen = pause
     of pause:
@@ -164,13 +203,16 @@ proc updateDrawFrame {.cdecl.} =
   elif currentScreen == gameplay or currentScreen == pause: 
     drawText("*Blows up pancakes with mind*\n\n\nPress Enter to open the pause screen.", 20, screenHeight-100, 40, LightGray)
     beginMode3D(camera)
+    drawModel(level, Vector3(x:0.0,y:0.0,z:0.0),4.0,White)
     for i,p in players.pairs:
       #drawRectangle(p.pos,p.size,Green)
       drawCube(p.pos,p.size,Green)
-      drawModel(level, Vector3(x:0.0,y:0.0,z:0.0),4.0,White)
       let groundpos = 0.0 # shadow's y (ground height)
       drawCircle3D(Vector3(x:p.pos.x,y:0.1,z:p.pos.z),2.0-(p.pos.y-groundpos)/10.0,Vector3(x:1.0),90.0,Black)
+      #drawCubeWires(p.pos,p.size*1.5,Blue)
       #drawGrid(1000,2.0)
+    for w in walls:
+      drawCube(w.pos,w.size,Red)
     endMode3D()
   # pause screen
   if currentScreen == pause:
