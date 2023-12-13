@@ -1,0 +1,13 @@
+[package]
+name = "macro3d_test"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+bracket-random = "0.8.7"
+enum-iterator = "1.4.0"
+ipslim = "1.0.0"
+macroquad = "0.3.25"
+pathfinding = "4.2.1"
