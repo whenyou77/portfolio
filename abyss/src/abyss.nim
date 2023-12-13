@@ -68,7 +68,7 @@ var state = gameplay
 let level_template = readFile($getAppDir() & "\\lvl.txt")
 var level = level_template
 echo level_template
-var stage = 4
+var stage = 0
 var gems_left = 0
 var camera = Camera2D(zoom:1.0,offset:Vector2(x:0.0,y: -stage.float*640.0))
 
