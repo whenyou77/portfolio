@@ -17,7 +17,7 @@
 #
 # ****************************************************************************************
 
-import raylib, raymath, reasings, nim_tiled, std/math, os
+import raylib, raymath, reasings, nim_tiled, std/math, os, rlgl
 
 # ----------------------------------------------------------------------------------------
 # Global Variables Definition
@@ -45,6 +45,7 @@ const
   screenWidth = 960
   screenHeight = 960
   cameraZoom = 56.0 # how far is the camera from the player? Base: 56
+  wallSize = 16.0
 
 var currentScreen = title
 var nextScreen = title
@@ -54,10 +55,18 @@ var fadeOut = false
 var fadeInLen = 60
 var fadeOutLen = 60
 var transitioning = false
+var stage = 0
+var mapSize = 20 # the map is always square
 
 var players: array[4,Player]
-var walls: seq[Wall] = @[Wall(pos:Vector3(x: -4.0,y:4.0,z: 4.0),size:Vector3(x: 8.0,y:8.0,z: 8.0))]
-var level: Model
+var walls: seq[Wall] = @[]
+var tileset: Texture2D
+#var level: Model
+
+let level_template = readFile($getAppDir() & "\\lvl.txt")
+var level = level_template
+var level_tex: Texture2D
+echo level_template
 
 var camera = Camera(
   position: Vector3(x: 5, y: 5, z: 10),  # Camera position
@@ -77,6 +86,8 @@ proc transition(transitionTo:Screen,lengthIn:int,lengthOut:int) =
     fadeTimer = lengthIn
     fadeOutLen = lengthOut
 
+
+# 3d aabb collision
 proc aabbcc*(x1: float, y1: float, z1: float, w1: float, h1: float, d1: float,
 x2: float, y2: float, z2: float, w2: float, h2: float, d2: float): bool =
   if
@@ -88,6 +99,94 @@ x2: float, y2: float, z2: float, w2: float, h2: float, d2: float): bool =
     d1/2.0 + z1 > z2-d2/2.0:
       return true
   false
+
+# Draw cube with texture piece applied to all faces
+proc drawCubeTextureRec(texture: Texture2D, source: Rectangle, position: Vector3, width: float, height: float, length: float, color: Color) =
+
+    let x: float = position.x
+    let y: float = position.y
+    let z: float = position.z
+    let texWidth: float = texture.width.float
+    let texHeight: float = texture.height.float
+
+    # Set desired texture to be enabled while drawing following vertex data
+    setTexture(texture.id)
+
+    # We calculate the normalized texture coordinates for the desired texture-source-rectangle
+    # It means converting from (tex.width, tex.height) coordinates to [0.0, 1.0] equivalent 
+    rlBegin(Quads)
+    color4ub(color.r, color.g, color.b, color.a)
+
+        # Front face
+    normal3f(0.0, 0.0, 1.0)
+    texCoord2f(source.x/texWidth, (source.y + source.height)/texHeight)
+    vertex3f(x - width/2, y - height/2, z + length/2)
+    texCoord2f((source.x + source.width)/texWidth, (source.y + source.height)/texHeight)
+    vertex3f(x + width/2, y - height/2, z + length/2)
+    texCoord2f((source.x + source.width)/texWidth, source.y/texHeight)
+    vertex3f(x + width/2, y + height/2, z + length/2)
+    texCoord2f(source.x/texWidth, source.y/texHeight)
+    vertex3f(x - width/2, y + height/2, z + length/2)
+
+        # Back face
+    normal3f(0.0, 0.0, -1.0)
+    texCoord2f((source.x + source.width)/texWidth, (source.y + source.height)/texHeight)
+    vertex3f(x - width/2, y - height/2, z - length/2)
+    texCoord2f((source.x + source.width)/texWidth, source.y/texHeight)
+    vertex3f(x - width/2, y + height/2, z - length/2)
+    texCoord2f(source.x/texWidth, source.y/texHeight)
+    vertex3f(x + width/2, y + height/2, z - length/2)
+    texCoord2f(source.x/texWidth, (source.y + source.height)/texHeight)
+    vertex3f(x + width/2, y - height/2, z - length/2)
+
+        # Top face
+    normal3f(0.0, 1.0, 0.0)
+    texCoord2f(source.x/texWidth, source.y/texHeight)
+    vertex3f(x - width/2, y + height/2, z - length/2)
+    texCoord2f(source.x/texWidth, (source.y + source.height)/texHeight)
+    vertex3f(x - width/2, y + height/2, z + length/2)
+    texCoord2f((source.x + source.width)/texWidth, (source.y + source.height)/texHeight)
+    vertex3f(x + width/2, y + height/2, z + length/2)
+    texCoord2f((source.x + source.width)/texWidth, source.y/texHeight)
+    vertex3f(x + width/2, y + height/2, z - length/2)
+
+        # Bottom face
+    normal3f(0.0, -1.0, 0.0)
+    texCoord2f((source.x + source.width)/texWidth, source.y/texHeight)
+    vertex3f(x - width/2, y - height/2, z - length/2)
+    texCoord2f(source.x/texWidth, source.y/texHeight)
+    vertex3f(x + width/2, y - height/2, z - length/2)
+    texCoord2f(source.x/texWidth, (source.y + source.height)/texHeight)
+    vertex3f(x + width/2, y - height/2, z + length/2)
+    texCoord2f((source.x + source.width)/texWidth, (source.y + source.height)/texHeight)
+    vertex3f(x - width/2, y - height/2, z + length/2)
+
+        # Right face
+    normal3f(1.0, 0.0, 0.0)
+    texCoord2f((source.x + source.width)/texWidth, (source.y + source.height)/texHeight)
+    vertex3f(x + width/2, y - height/2, z - length/2)
+    texCoord2f((source.x + source.width)/texWidth, source.y/texHeight)
+    vertex3f(x + width/2, y + height/2, z - length/2)
+    texCoord2f(source.x/texWidth, source.y/texHeight)
+    vertex3f(x + width/2, y + height/2, z + length/2)
+    texCoord2f(source.x/texWidth, (source.y + source.height)/texHeight)
+    vertex3f(x + width/2, y - height/2, z + length/2)
+
+        # Left face
+    normal3f( - 1.0, 0.0, 0.0)
+    texCoord2f(source.x/texWidth, (source.y + source.height)/texHeight)
+    vertex3f(x - width/2, y - height/2, z - length/2)
+    texCoord2f((source.x + source.width)/texWidth, (source.y + source.height)/texHeight)
+    vertex3f(x - width/2, y - height/2, z + length/2)
+    texCoord2f((source.x + source.width)/texWidth, source.y/texHeight)
+    vertex3f(x - width/2, y + height/2, z + length/2)
+    texCoord2f(source.x/texWidth, source.y/texHeight)
+    vertex3f(x - width/2, y + height/2, z - length/2)
+
+    rlEnd()
+
+    setTexture(0)
+
 
 # ----------------------------------------------------------------------------------------
 # Module functions Definition
@@ -108,7 +207,7 @@ proc updateDrawFrame {.cdecl.} =
         if i == 0:
           if isKeyDown(D) or isKeyDown(Right):
             if p.vel.x < 0.5: p.vel.x += 0.075
-          elif isKeyDown(W) or isKeyDown(Left):
+          elif isKeyDown(A) or isKeyDown(Left):
             if p.vel.x > -0.5: p.vel.x -= 0.075
           else:
             if p.vel.x > 0.0: 
@@ -121,7 +220,7 @@ proc updateDrawFrame {.cdecl.} =
                 p.vel.x = 0.0
           if isKeyDown(S) or isKeyDown(Down):
             if p.vel.z < 0.5: p.vel.z += 0.075
-          elif isKeyDown(KeyboardKey.E) or isKeyDown(Up):
+          elif isKeyDown(W) or isKeyDown(Up):
             if p.vel.z > -0.5: p.vel.z -= 0.075
           else:
             if p.vel.z > 0.0: 
@@ -168,6 +267,9 @@ proc updateDrawFrame {.cdecl.} =
           p.pos.y = p.size.y/2.0
           p.vel.y = 0.0
           p.grounded = true
+        if p.pos.y > wallSize-p.size.y/2.0:
+          p.pos.y = wallSize-p.size.y/2.0
+          p.vel.y = 0.0
       camera.position = players[0].pos + Vector3(x:cameraZoom,y:cameraZoom,z:cameraZoom)
       camera.target = players[0].pos
       if isKeyPressed(Enter): currentScreen = pause
@@ -191,7 +293,16 @@ proc updateDrawFrame {.cdecl.} =
       fadeTimer=fadeOutLen
       currentScreen = nextScreen
       case currentScreen:
-        of gameplay: players[0] = Player(pos:Vector3(x: 0.0,y:1.0,z: 0.0),size:Vector3(x:2.0,y:2.0,z:2.0),vel:Vector3(),hp:1,att_cooldown:0)
+        of gameplay: 
+          for y in stage*mapSize..stage*mapSize+mapSize-1:
+            for x in 0..mapSize-1:
+              if level[y*22+x] == '1':
+                walls.add(Wall(pos:Vector3(x:x.float*wallSize,y:wallSize/2.0,z:y.float*wallSize),size:Vector3(x:wallSize,y:wallSize,z:wallSize)))
+          for y in stage*mapSize..stage*mapSize+mapSize-1:
+            for x in 0..mapSize-1:
+              if level[y*22+x] == '2':
+                players[0] = Player(pos:Vector3(x: x.float*wallSize,y:1.0,z: y.float*wallSize),size:Vector3(x:2.0,y:2.0,z:2.0),vel:Vector3(),hp:1,att_cooldown:0)
+                break
         else: camera.position = Vector3()
   # --------------------------------------------------------------------------------------
   # Draw
@@ -203,7 +314,11 @@ proc updateDrawFrame {.cdecl.} =
   elif currentScreen == gameplay or currentScreen == pause: 
     drawText("*Blows up pancakes with mind*\n\n\nPress Enter to open the pause screen.", 20, screenHeight-100, 40, LightGray)
     beginMode3D(camera)
-    drawModel(level, Vector3(x:0.0,y:0.0,z:0.0),4.0,White)
+    #drawModel(level, Vector3(x:0.0,y:0.0,z:0.0),4.0,White)
+    let mesh = genMeshPlane(mapSize.float*wallSize,mapSize.float*wallSize,10,10)
+    var floor = loadModelFromMesh(mesh)
+    floor.materials[0].maps[Albedo].texture = level_tex
+    drawModel(floor, Vector3(x:(mapSize/2).float*wallSize,y:0.0,z:(mapSize/2).float*wallSize),1.0,White)
     for i,p in players.pairs:
       #drawRectangle(p.pos,p.size,Green)
       drawCube(p.pos,p.size,Green)
@@ -212,7 +327,8 @@ proc updateDrawFrame {.cdecl.} =
       #drawCubeWires(p.pos,p.size*1.5,Blue)
       #drawGrid(1000,2.0)
     for w in walls:
-      drawCube(w.pos,w.size,Red)
+      #drawCube(w.pos,w.size,Red)
+      drawCubeTextureRec(level_tex, Rectangle(x:0,y:0,width:16,height:16),w.pos,w.size.x,w.size.y,w.size.z,Red)
     endMode3D()
   # pause screen
   if currentScreen == pause:
@@ -230,10 +346,10 @@ proc main =
   # Initialization
   # --------------------------------------------------------------------------------------
   initWindow(screenWidth, screenHeight, "raylib [core] example - basic window")
-  level = loadModel(getAppDir() & "./dungeon_test.obj")
-  let level_tex = loadTexture(getAppDir() & "./dungeon_tileset2.png")
+  #level = loadModel(getAppDir() & "./dungeon_test.obj")
+  level_tex = loadTexture(getAppDir() & "./dungeon_tileset2.png")
   level_tex.setTextureFilter(Point)
-  level.materials[0].maps[Albedo].texture= level_tex
+  #level.materials[0].maps[Albedo].texture= level_tex
   when defined(emscripten):
     emscriptenSetMainLoop(updateDrawFrame, 60, 1)
   else:
