@@ -60,12 +60,12 @@ var mapSize = 20 # the map is always square
 
 var players: array[4,Player]
 var walls: seq[Wall] = @[]
-var tileset: Texture2D
 #var level: Model
 
 let level_template = readFile($getAppDir() & "\\lvl.txt")
 var level = level_template
 var level_tex: Texture2D
+var floor: Model
 echo level_template
 
 var camera = Camera(
@@ -101,7 +101,7 @@ x2: float, y2: float, z2: float, w2: float, h2: float, d2: float): bool =
   false
 
 # Draw cube with texture piece applied to all faces
-proc drawCubeTextureRec(texture: Texture2D, source: Rectangle, position: Vector3, width: float, height: float, length: float, color: Color) =
+proc drawCubeTextureRec(texture: Texture2D, source: Rectangle, position: Vector3, width: float, height: float, length: float, faces: (bool,bool,bool,bool,bool,bool), color: Color) =
 
     let x: float = position.x
     let y: float = position.y
@@ -296,7 +296,7 @@ proc updateDrawFrame {.cdecl.} =
         of gameplay: 
           for y in stage*mapSize..stage*mapSize+mapSize-1:
             for x in 0..mapSize-1:
-              if level[y*22+x] == '1':
+              if level[y*22+x] == '#':
                 walls.add(Wall(pos:Vector3(x:x.float*wallSize,y:wallSize/2.0,z:y.float*wallSize),size:Vector3(x:wallSize,y:wallSize,z:wallSize)))
           for y in stage*mapSize..stage*mapSize+mapSize-1:
             for x in 0..mapSize-1:
@@ -315,9 +315,6 @@ proc updateDrawFrame {.cdecl.} =
     drawText("*Blows up pancakes with mind*\n\n\nPress Enter to open the pause screen.", 20, screenHeight-100, 40, LightGray)
     beginMode3D(camera)
     #drawModel(level, Vector3(x:0.0,y:0.0,z:0.0),4.0,White)
-    let mesh = genMeshPlane(mapSize.float*wallSize,mapSize.float*wallSize,10,10)
-    var floor = loadModelFromMesh(mesh)
-    floor.materials[0].maps[Albedo].texture = level_tex
     drawModel(floor, Vector3(x:(mapSize/2).float*wallSize,y:0.0,z:(mapSize/2).float*wallSize),1.0,White)
     for i,p in players.pairs:
       #drawRectangle(p.pos,p.size,Green)
@@ -326,9 +323,11 @@ proc updateDrawFrame {.cdecl.} =
       drawCircle3D(Vector3(x:p.pos.x,y:0.1,z:p.pos.z),2.0-(p.pos.y-groundpos)/10.0,Vector3(x:1.0),90.0,Black)
       #drawCubeWires(p.pos,p.size*1.5,Blue)
       #drawGrid(1000,2.0)
-    for w in walls:
       #drawCube(w.pos,w.size,Red)
-      drawCubeTextureRec(level_tex, Rectangle(x:0,y:0,width:16,height:16),w.pos,w.size.x,w.size.y,w.size.z,Red)
+    for y in stage*mapSize..stage*mapSize+mapSize-1:
+      for x in 0..mapSize-1:
+        if level[y*22+x] == '#':
+          drawCubeTextureRec(level_tex, Rectangle(x:0,y:0,width:16,height:16),Vector3(x:x.float*wallSize,y:wallSize/2.0,z:y.float*wallSize),wallSize,wallSize,wallSize,(true,true,true,true,true,true),Red)
     endMode3D()
   # pause screen
   if currentScreen == pause:
@@ -350,6 +349,8 @@ proc main =
   level_tex = loadTexture(getAppDir() & "./dungeon_tileset2.png")
   level_tex.setTextureFilter(Point)
   #level.materials[0].maps[Albedo].texture= level_tex
+  floor = loadModelFromMesh(genMeshPlane(mapSize.float*wallSize,mapSize.float*wallSize,10,10))
+  floor.materials[0].maps[Albedo].texture = level_tex
   when defined(emscripten):
     emscriptenSetMainLoop(updateDrawFrame, 60, 1)
   else:
