@@ -57,6 +57,7 @@ var fadeOutLen = 60
 var transitioning = false
 var stage = 0
 var mapSize = 20 # the map is always square
+var cam_angle = 0.0
 
 var players: array[4,Player]
 var walls: seq[Wall] = @[]
@@ -187,6 +188,31 @@ proc drawCubeTextureRec(texture: Texture2D, source: Rectangle, position: Vector3
 
     setTexture(0)
 
+# Rotates the camera around its up vector
+# Yaw is "looking left and right"
+# If rotateAroundTarget is false, the camera rotates around its position
+# Note: angle must be provided in radians
+proc cameraYaw(camera: var Camera, angle: float, rotateAroundTarget: bool) =
+
+    # Rotation axis
+    var up = camera.up.normalize()
+
+    # View vector
+    var targetPosition = camera.target-camera.position
+
+    # Rotate view vector around up axis
+    targetPosition = rotateByAxisAngle(targetPosition, up, angle)
+
+    if rotateAroundTarget:
+    
+        # Move position relative to target
+        camera.position = camera.target-targetPosition
+    
+    else: # rotate around camera.position
+    
+        # Move target relative to position
+        camera.target = camera.position+targetPosition
+
 
 # ----------------------------------------------------------------------------------------
 # Module functions Definition
@@ -199,6 +225,7 @@ proc updateDrawFrame {.cdecl.} =
   # Game logic
   case currentScreen:
     of gameplay:
+      # i is the player id
       for i,p in players.mpairs:
         if p.att_cooldown > 0: 
           p.att_cooldown -= 1
@@ -231,10 +258,21 @@ proc updateDrawFrame {.cdecl.} =
               p.vel.z += 0.05
               if p.vel.z > 0.0:
                 p.vel.z = 0.0
+          if isKeyPressed(KeyboardKey.E):
+            cam_angle += PI/2.0
+          if isKeyPressed(Q):
+            cam_angle -= PI/2.0
           if isKeyPressed(Space) and p.grounded: p.vel.y = 1.0
           if isMouseButtonPressed(MouseButton.Left) and p.att_cooldown == 0: p.att_cooldown = 60
         p.grounded = false
         p.pos.x += p.vel.x
+        echo players[0].pos.z,players[0].vel.z
+        if level[(floor((p.pos.z-p.size.z/2.0+wallSize/2.0)/wallSize)*(mapSize+2).float+floor((p.pos.x.float-p.size.x/2.0+wallSize/2.0)/wallSize)).int] == '#' or level[(floor((p.pos.z.float+p.size.z/2.0+wallSize/2.0)/wallSize)*(mapSize+2).float+floor((p.pos.x.float-p.size.x/2.0+wallSize/2.0)/wallSize)).int] == '#':
+          p.pos.x = (floor((p.pos.x.float-p.size.x/2.0+wallSize/2.0)/wallSize))*wallSize+wallSize/2.0+p.size.x/2.0
+          echo "collx-"
+        elif level[(floor((p.pos.z+p.size.z/2.0+wallSize/2.0)/wallSize)*(mapSize+2).float+floor((p.pos.x.float+p.size.x/2.0+wallSize/2.0)/wallSize)).int] == '#' or level[(floor((p.pos.z.float-p.size.z/2.0+wallSize/2.0)/wallSize)*(mapSize+2).float+floor((p.pos.x.float+p.size.x/2.0+wallSize/2.0)/wallSize)).int] == '#':
+          p.pos.x = (floor((p.pos.x.float+p.size.x/2.0+wallSize/2.0)/wallSize))*wallSize-wallSize/2.0-p.size.x/2.0
+          echo "collx+"
         for w in walls:
           if aabbcc(p.pos.x,p.pos.z,p.pos.y,p.size.x,p.size.z,p.size.y,w.pos.x,w.pos.z,w.pos.y,w.size.x,w.size.z,w.size.y):
             if p.pos.x > w.pos.x:
@@ -242,15 +280,19 @@ proc updateDrawFrame {.cdecl.} =
             else:
               p.pos.x = w.pos.x-w.size.x/2.0-p.size.x/2.0
             p.vel.x = 0.0
-            echo "collision"
         p.pos.z += p.vel.z
+        if level[(floor((p.pos.z-p.size.z/2.0+wallSize/2.0)/wallSize)*(mapSize+2).float+floor((p.pos.x.float-p.size.x/2.0+wallSize/2.0)/wallSize)).int] == '#' or level[(floor((p.pos.z.float-p.size.z/2.0+wallSize/2.0)/wallSize)*(mapSize+2).float+floor((p.pos.x.float+p.size.x/2.0+wallSize/2.0)/wallSize)).int] == '#':
+          p.pos.z = (floor((p.pos.z.float-p.size.z/2.0+wallSize/2.0)/wallSize))*wallSize+wallSize/2.0+p.size.z/2.0
+          echo "collz-"
+        elif level[(floor((p.pos.z+p.size.z/2.0+wallSize/2.0)/wallSize)*(mapSize+2).float+floor((p.pos.x.float+p.size.x/2.0+wallSize/2.0)/wallSize)).int] == '#' or level[(floor((p.pos.z.float+p.size.z/2.0+wallSize/2.0)/wallSize)*(mapSize+2).float+floor((p.pos.x.float-p.size.x/2.0+wallSize/2.0)/wallSize)).int] == '#':
+          p.pos.z = (floor((p.pos.z.float+p.size.z/2.0+wallSize/2.0)/wallSize))*wallSize-wallSize/2.0-p.size.z/2.0
+          echo "collz+"
         for w in walls:
           if aabbcc(p.pos.x,p.pos.z,p.pos.y,p.size.x,p.size.z,p.size.y,w.pos.x,w.pos.z,w.pos.y,w.size.x,w.size.z,w.size.y):
             if p.pos.z > w.pos.z:
               p.pos.z = w.pos.z+w.size.z/2.0+p.size.z/2.0
             else:
               p.pos.z = w.pos.z-w.size.z/2.0-p.size.z/2.0
-            echo "collision"
             p.vel.z = 0.0
         p.pos.y += p.vel.y
         for w in walls:
@@ -261,8 +303,6 @@ proc updateDrawFrame {.cdecl.} =
               p.grounded = true
             else:
               p.pos.y = w.pos.y-w.size.y/2.0-p.size.y/2.0
-            echo "collision"
-        echo p.pos.x, p.pos.z
         if p.pos.y < p.size.y/2.0: 
           p.pos.y = p.size.y/2.0
           p.vel.y = 0.0
@@ -272,6 +312,7 @@ proc updateDrawFrame {.cdecl.} =
           p.vel.y = 0.0
       camera.position = players[0].pos + Vector3(x:cameraZoom,y:cameraZoom,z:cameraZoom)
       camera.target = players[0].pos
+      camera.cameraYaw(cam_angle,true)
       if isKeyPressed(Enter): currentScreen = pause
     of pause:
       if isKeyPressed(Enter): currentScreen = gameplay
@@ -294,10 +335,10 @@ proc updateDrawFrame {.cdecl.} =
       currentScreen = nextScreen
       case currentScreen:
         of gameplay: 
-          for y in stage*mapSize..stage*mapSize+mapSize-1:
+          #[for y in stage*mapSize..stage*mapSize+mapSize-1:
             for x in 0..mapSize-1:
               if level[y*22+x] == '#':
-                walls.add(Wall(pos:Vector3(x:x.float*wallSize,y:wallSize/2.0,z:y.float*wallSize),size:Vector3(x:wallSize,y:wallSize,z:wallSize)))
+                walls.add(Wall(pos:Vector3(x:x.float*wallSize,y:wallSize/2.0,z:y.float*wallSize),size:Vector3(x:wallSize,y:wallSize,z:wallSize)))]#
           for y in stage*mapSize..stage*mapSize+mapSize-1:
             for x in 0..mapSize-1:
               if level[y*22+x] == '2':
@@ -329,6 +370,14 @@ proc updateDrawFrame {.cdecl.} =
         if level[y*22+x] == '#':
           drawCubeTextureRec(level_tex, Rectangle(x:0,y:0,width:16,height:16),Vector3(x:x.float*wallSize,y:wallSize/2.0,z:y.float*wallSize),wallSize,wallSize,wallSize,(true,true,true,true,true,true),Red)
     endMode3D()
+    for y in stage*mapSize..stage*mapSize+19:
+      for x in 0..19:
+        if level[y*22+x] == '#':
+          drawRectangle(Vector2(x:x.float*wallSize,y:y.float*wallSize),Vector2(x:wallSize,y:wallSize),White)
+    drawRectangle(Vector2(y:floor((players[0].pos.z-players[0].size.z/2.0+wallSize/2.0)/wallSize)*wallSize,x:floor((players[0].pos.x.float-players[0].size.x/2.0+wallSize/2.0)/wallSize)*wallSize),Vector2(x:wallSize,y:wallSize),Green)
+    drawRectangle(Vector2(y:floor((players[0].pos.z+players[0].size.z/2.0+wallSize/2.0)/wallSize)*wallSize,x:floor((players[0].pos.x.float-players[0].size.x/2.0+wallSize/2.0)/wallSize)*wallSize),Vector2(x:wallSize,y:wallSize),Green)
+    drawRectangle(Vector2(y:floor((players[0].pos.z-players[0].size.z/2.0+wallSize/2.0)/wallSize)*wallSize,x:floor((players[0].pos.x.float+players[0].size.x/2.0+wallSize/2.0)/wallSize)*wallSize),Vector2(x:wallSize,y:wallSize),Green)
+    drawRectangle(Vector2(y:floor((players[0].pos.z+players[0].size.z/2.0+wallSize/2.0)/wallSize)*wallSize,x:floor((players[0].pos.x.float+players[0].size.x/2.0+wallSize/2.0)/wallSize)*wallSize),Vector2(x:wallSize,y:wallSize),Green)
   # pause screen
   if currentScreen == pause:
     drawRectangle(0,0,screenWidth,screenHeight,Color(r:0,g:0,b:0,a:96))
