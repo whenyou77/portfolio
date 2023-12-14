@@ -119,70 +119,76 @@ proc drawCubeTextureRec(texture: Texture2D, source: Rectangle, position: Vector3
     color4ub(color.r, color.g, color.b, color.a)
 
         # Front face
-    normal3f(0.0, 0.0, 1.0)
-    texCoord2f(source.x/texWidth, (source.y + source.height)/texHeight)
-    vertex3f(x - width/2, y - height/2, z + length/2)
-    texCoord2f((source.x + source.width)/texWidth, (source.y + source.height)/texHeight)
-    vertex3f(x + width/2, y - height/2, z + length/2)
-    texCoord2f((source.x + source.width)/texWidth, source.y/texHeight)
-    vertex3f(x + width/2, y + height/2, z + length/2)
-    texCoord2f(source.x/texWidth, source.y/texHeight)
-    vertex3f(x - width/2, y + height/2, z + length/2)
+    if faces[0]:
+      normal3f(0.0, 0.0, 1.0)
+      texCoord2f(source.x/texWidth, (source.y + source.height)/texHeight)
+      vertex3f(x - width/2, y - height/2, z + length/2)
+      texCoord2f((source.x + source.width)/texWidth, (source.y + source.height)/texHeight)
+      vertex3f(x + width/2, y - height/2, z + length/2)
+      texCoord2f((source.x + source.width)/texWidth, source.y/texHeight)
+      vertex3f(x + width/2, y + height/2, z + length/2)
+      texCoord2f(source.x/texWidth, source.y/texHeight)
+      vertex3f(x - width/2, y + height/2, z + length/2)
 
-        # Back face
-    normal3f(0.0, 0.0, -1.0)
-    texCoord2f((source.x + source.width)/texWidth, (source.y + source.height)/texHeight)
-    vertex3f(x - width/2, y - height/2, z - length/2)
-    texCoord2f((source.x + source.width)/texWidth, source.y/texHeight)
-    vertex3f(x - width/2, y + height/2, z - length/2)
-    texCoord2f(source.x/texWidth, source.y/texHeight)
-    vertex3f(x + width/2, y + height/2, z - length/2)
-    texCoord2f(source.x/texWidth, (source.y + source.height)/texHeight)
-    vertex3f(x + width/2, y - height/2, z - length/2)
+        # Back face\
+    if faces[1]:
+      normal3f(0.0, 0.0, -1.0)
+      texCoord2f((source.x + source.width)/texWidth, (source.y + source.height)/texHeight)
+      vertex3f(x - width/2, y - height/2, z - length/2)
+      texCoord2f((source.x + source.width)/texWidth, source.y/texHeight)
+      vertex3f(x - width/2, y + height/2, z - length/2)
+      texCoord2f(source.x/texWidth, source.y/texHeight)
+      vertex3f(x + width/2, y + height/2, z - length/2)
+      texCoord2f(source.x/texWidth, (source.y + source.height)/texHeight)
+      vertex3f(x + width/2, y - height/2, z - length/2)
 
         # Top face
-    normal3f(0.0, 1.0, 0.0)
-    texCoord2f(source.x/texWidth, source.y/texHeight)
-    vertex3f(x - width/2, y + height/2, z - length/2)
-    texCoord2f(source.x/texWidth, (source.y + source.height)/texHeight)
-    vertex3f(x - width/2, y + height/2, z + length/2)
-    texCoord2f((source.x + source.width)/texWidth, (source.y + source.height)/texHeight)
-    vertex3f(x + width/2, y + height/2, z + length/2)
-    texCoord2f((source.x + source.width)/texWidth, source.y/texHeight)
-    vertex3f(x + width/2, y + height/2, z - length/2)
+    if faces[2]:
+      normal3f(0.0, 1.0, 0.0)
+      texCoord2f(source.x/texWidth, source.y/texHeight)
+      vertex3f(x - width/2, y + height/2, z - length/2)
+      texCoord2f(source.x/texWidth, (source.y + source.height)/texHeight)
+      vertex3f(x - width/2, y + height/2, z + length/2)
+      texCoord2f((source.x + source.width)/texWidth, (source.y + source.height)/texHeight)
+      vertex3f(x + width/2, y + height/2, z + length/2)
+      texCoord2f((source.x + source.width)/texWidth, source.y/texHeight)
+      vertex3f(x + width/2, y + height/2, z - length/2)
 
         # Bottom face
-    normal3f(0.0, -1.0, 0.0)
-    texCoord2f((source.x + source.width)/texWidth, source.y/texHeight)
-    vertex3f(x - width/2, y - height/2, z - length/2)
-    texCoord2f(source.x/texWidth, source.y/texHeight)
-    vertex3f(x + width/2, y - height/2, z - length/2)
-    texCoord2f(source.x/texWidth, (source.y + source.height)/texHeight)
-    vertex3f(x + width/2, y - height/2, z + length/2)
-    texCoord2f((source.x + source.width)/texWidth, (source.y + source.height)/texHeight)
-    vertex3f(x - width/2, y - height/2, z + length/2)
+    if faces[3]:
+      normal3f(0.0, -1.0, 0.0)
+      texCoord2f((source.x + source.width)/texWidth, source.y/texHeight)
+      vertex3f(x - width/2, y - height/2, z - length/2)
+      texCoord2f(source.x/texWidth, source.y/texHeight)
+      vertex3f(x + width/2, y - height/2, z - length/2)
+      texCoord2f(source.x/texWidth, (source.y + source.height)/texHeight)
+      vertex3f(x + width/2, y - height/2, z + length/2)
+      texCoord2f((source.x + source.width)/texWidth, (source.y + source.height)/texHeight)
+      vertex3f(x - width/2, y - height/2, z + length/2)
 
         # Right face
-    normal3f(1.0, 0.0, 0.0)
-    texCoord2f((source.x + source.width)/texWidth, (source.y + source.height)/texHeight)
-    vertex3f(x + width/2, y - height/2, z - length/2)
-    texCoord2f((source.x + source.width)/texWidth, source.y/texHeight)
-    vertex3f(x + width/2, y + height/2, z - length/2)
-    texCoord2f(source.x/texWidth, source.y/texHeight)
-    vertex3f(x + width/2, y + height/2, z + length/2)
-    texCoord2f(source.x/texWidth, (source.y + source.height)/texHeight)
-    vertex3f(x + width/2, y - height/2, z + length/2)
+    if faces[4]:
+      normal3f(1.0, 0.0, 0.0)
+      texCoord2f((source.x + source.width)/texWidth, (source.y + source.height)/texHeight)
+      vertex3f(x + width/2, y - height/2, z - length/2)
+      texCoord2f((source.x + source.width)/texWidth, source.y/texHeight)
+      vertex3f(x + width/2, y + height/2, z - length/2)
+      texCoord2f(source.x/texWidth, source.y/texHeight)
+      vertex3f(x + width/2, y + height/2, z + length/2)
+      texCoord2f(source.x/texWidth, (source.y + source.height)/texHeight)
+      vertex3f(x + width/2, y - height/2, z + length/2)
 
         # Left face
-    normal3f( - 1.0, 0.0, 0.0)
-    texCoord2f(source.x/texWidth, (source.y + source.height)/texHeight)
-    vertex3f(x - width/2, y - height/2, z - length/2)
-    texCoord2f((source.x + source.width)/texWidth, (source.y + source.height)/texHeight)
-    vertex3f(x - width/2, y - height/2, z + length/2)
-    texCoord2f((source.x + source.width)/texWidth, source.y/texHeight)
-    vertex3f(x - width/2, y + height/2, z + length/2)
-    texCoord2f(source.x/texWidth, source.y/texHeight)
-    vertex3f(x - width/2, y + height/2, z - length/2)
+    if faces[5]:
+      normal3f( - 1.0, 0.0, 0.0)
+      texCoord2f(source.x/texWidth, (source.y + source.height)/texHeight)
+      vertex3f(x - width/2, y - height/2, z - length/2)
+      texCoord2f((source.x + source.width)/texWidth, (source.y + source.height)/texHeight)
+      vertex3f(x - width/2, y - height/2, z + length/2)
+      texCoord2f((source.x + source.width)/texWidth, source.y/texHeight)
+      vertex3f(x - width/2, y + height/2, z + length/2)
+      texCoord2f(source.x/texWidth, source.y/texHeight)
+      vertex3f(x - width/2, y + height/2, z - length/2)
 
     rlEnd()
 
@@ -266,12 +272,14 @@ proc updateDrawFrame {.cdecl.} =
           if isMouseButtonPressed(MouseButton.Left) and p.att_cooldown == 0: p.att_cooldown = 60
         p.grounded = false
         p.pos.x += p.vel.x
-        echo players[0].pos.z,players[0].vel.z
+        if i == 0: echo (floor((p.pos.z.float+p.size.z/2.0+wallSize/2.0)/wallSize))*wallSize-wallSize/2.0-p.size.z/2.0, (floor((p.pos.z.float-p.size.z/2.0+wallSize/2.0)/wallSize))*wallSize+wallSize/2.0+p.size.z/2.0
         if level[(floor((p.pos.z-p.size.z/2.0+wallSize/2.0)/wallSize)*(mapSize+2).float+floor((p.pos.x.float-p.size.x/2.0+wallSize/2.0)/wallSize)).int] == '#' or level[(floor((p.pos.z.float+p.size.z/2.0+wallSize/2.0)/wallSize)*(mapSize+2).float+floor((p.pos.x.float-p.size.x/2.0+wallSize/2.0)/wallSize)).int] == '#':
           p.pos.x = (floor((p.pos.x.float-p.size.x/2.0+wallSize/2.0)/wallSize))*wallSize+wallSize/2.0+p.size.x/2.0
+          p.vel.x = 0.0
           echo "collx-"
         elif level[(floor((p.pos.z+p.size.z/2.0+wallSize/2.0)/wallSize)*(mapSize+2).float+floor((p.pos.x.float+p.size.x/2.0+wallSize/2.0)/wallSize)).int] == '#' or level[(floor((p.pos.z.float-p.size.z/2.0+wallSize/2.0)/wallSize)*(mapSize+2).float+floor((p.pos.x.float+p.size.x/2.0+wallSize/2.0)/wallSize)).int] == '#':
-          p.pos.x = (floor((p.pos.x.float+p.size.x/2.0+wallSize/2.0)/wallSize))*wallSize-wallSize/2.0-p.size.x/2.0
+          p.pos.x = (floor((p.pos.x.float+p.size.x/2.0+wallSize/2.0)/wallSize))*wallSize-wallSize/2.0-p.size.x/2.0-0.0001
+          p.vel.x = 0.0
           echo "collx+"
         for w in walls:
           if aabbcc(p.pos.x,p.pos.z,p.pos.y,p.size.x,p.size.z,p.size.y,w.pos.x,w.pos.z,w.pos.y,w.size.x,w.size.z,w.size.y):
@@ -283,9 +291,11 @@ proc updateDrawFrame {.cdecl.} =
         p.pos.z += p.vel.z
         if level[(floor((p.pos.z-p.size.z/2.0+wallSize/2.0)/wallSize)*(mapSize+2).float+floor((p.pos.x.float-p.size.x/2.0+wallSize/2.0)/wallSize)).int] == '#' or level[(floor((p.pos.z.float-p.size.z/2.0+wallSize/2.0)/wallSize)*(mapSize+2).float+floor((p.pos.x.float+p.size.x/2.0+wallSize/2.0)/wallSize)).int] == '#':
           p.pos.z = (floor((p.pos.z.float-p.size.z/2.0+wallSize/2.0)/wallSize))*wallSize+wallSize/2.0+p.size.z/2.0
+          p.vel.z = 0.0
           echo "collz-"
-        elif level[(floor((p.pos.z+p.size.z/2.0+wallSize/2.0)/wallSize)*(mapSize+2).float+floor((p.pos.x.float+p.size.x/2.0+wallSize/2.0)/wallSize)).int] == '#' or level[(floor((p.pos.z.float+p.size.z/2.0+wallSize/2.0)/wallSize)*(mapSize+2).float+floor((p.pos.x.float-p.size.x/2.0+wallSize/2.0)/wallSize)).int] == '#':
-          p.pos.z = (floor((p.pos.z.float+p.size.z/2.0+wallSize/2.0)/wallSize))*wallSize-wallSize/2.0-p.size.z/2.0
+        elif level[(floor((p.pos.z+p.size.z/2.0+wallSize/2.0)/wallSize)*(mapSize+2).float+floor((p.pos.x.float-p.size.x/2.0+wallSize/2.0)/wallSize)).int] == '#' or level[(floor((p.pos.z.float+p.size.z/2.0+wallSize/2.0)/wallSize)*(mapSize+2).float+floor((p.pos.x.float+p.size.x/2.0+wallSize/2.0)/wallSize)).int] == '#':
+          p.pos.z = (floor((p.pos.z.float+p.size.z/2.0+wallSize/2.0)/wallSize))*wallSize-wallSize/2.0-p.size.z/2.0-0.0001
+          p.vel.z = 0.0
           echo "collz+"
         for w in walls:
           if aabbcc(p.pos.x,p.pos.z,p.pos.y,p.size.x,p.size.z,p.size.y,w.pos.x,w.pos.z,w.pos.y,w.size.x,w.size.z,w.size.y):
@@ -314,6 +324,7 @@ proc updateDrawFrame {.cdecl.} =
       camera.target = players[0].pos
       camera.cameraYaw(cam_angle,true)
       if isKeyPressed(Enter): currentScreen = pause
+      if isKeyPressed(R): transition(gameplay,30,30)
     of pause:
       if isKeyPressed(Enter): currentScreen = gameplay
       if isKeyPressed(Backspace): transition(title,30,30)
@@ -339,6 +350,7 @@ proc updateDrawFrame {.cdecl.} =
             for x in 0..mapSize-1:
               if level[y*22+x] == '#':
                 walls.add(Wall(pos:Vector3(x:x.float*wallSize,y:wallSize/2.0,z:y.float*wallSize),size:Vector3(x:wallSize,y:wallSize,z:wallSize)))]#
+          cam_angle = 0.0
           for y in stage*mapSize..stage*mapSize+mapSize-1:
             for x in 0..mapSize-1:
               if level[y*22+x] == '2':
@@ -356,7 +368,7 @@ proc updateDrawFrame {.cdecl.} =
     drawText("*Blows up pancakes with mind*\n\n\nPress Enter to open the pause screen.", 20, screenHeight-100, 40, LightGray)
     beginMode3D(camera)
     #drawModel(level, Vector3(x:0.0,y:0.0,z:0.0),4.0,White)
-    drawModel(floor, Vector3(x:(mapSize/2).float*wallSize,y:0.0,z:(mapSize/2).float*wallSize),1.0,White)
+    #drawModel(floor, Vector3(x:(mapSize/2).float*wallSize,y:0.0,z:(mapSize/2).float*wallSize),1.0,White)
     for i,p in players.pairs:
       #drawRectangle(p.pos,p.size,Green)
       drawCube(p.pos,p.size,Green)
@@ -365,10 +377,22 @@ proc updateDrawFrame {.cdecl.} =
       #drawCubeWires(p.pos,p.size*1.5,Blue)
       #drawGrid(1000,2.0)
       #drawCube(w.pos,w.size,Red)
+    let floorSize = wallSize*mapSize.float
+    drawCubeTextureRec(level_tex, Rectangle(x:0,y:0,width:16,height:16),Vector3(x:0.0,y: -wallSize/2.0,z:0.0),floorSize,floorSize,floorSize,(false,false,true,false,false,false),LightGray)
     for y in stage*mapSize..stage*mapSize+mapSize-1:
       for x in 0..mapSize-1:
-        if level[y*22+x] == '#':
-          drawCubeTextureRec(level_tex, Rectangle(x:0,y:0,width:16,height:16),Vector3(x:x.float*wallSize,y:wallSize/2.0,z:y.float*wallSize),wallSize,wallSize,wallSize,(true,true,true,true,true,true),Red)
+        if x != 19 and y != stage*mapSize+19 and x != 0 and y != stage*mapSize:
+          if level[y*22+x] == '#':
+            let row = mapSize+2 # how many characters till next row in the map?
+            let front = not (level[y*row+x+row] == '#')
+            let back = not (level[y*row+x-row] == '#')
+            #let top = not (level[y*22+x] == '#')
+            #let bottom = not (level[y*22+x] == '#')
+            let right = not (level[y*row+x+1] == '#')
+            let left = not (level[y*row+x-1] == '#')
+            drawCubeTextureRec(level_tex, Rectangle(x:0,y:0,width:16,height:16),Vector3(x:x.float*wallSize,y:wallSize/2.0,z:y.float*wallSize),wallSize,wallSize,wallSize,(front,back,false,false,right,left),White)
+          else:
+            drawCubeTextureRec(level_tex, Rectangle(x:0,y:0,width:16,height:16),Vector3(x:x.float*wallSize,y: -8.0,z:y.float*wallSize),wallSize,wallSize,wallSize,(false,false,true,false,false,false),LightGray)
     endMode3D()
     for y in stage*mapSize..stage*mapSize+19:
       for x in 0..19:
