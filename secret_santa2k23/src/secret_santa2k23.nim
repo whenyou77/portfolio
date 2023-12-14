@@ -268,6 +268,8 @@ proc updateDrawFrame {.cdecl.} =
             cam_angle += PI/2.0
           if isKeyPressed(Q):
             cam_angle -= PI/2.0
+          if cam_angle < 0.0: cam_angle = PI*1.5
+          if cam_angle > PI*1.5: cam_angle = 0.0
           if isKeyPressed(Space) and p.grounded: p.vel.y = 1.0
           if isMouseButtonPressed(MouseButton.Left) and p.att_cooldown == 0: p.att_cooldown = 60
         p.grounded = false
@@ -365,7 +367,7 @@ proc updateDrawFrame {.cdecl.} =
   if currentScreen == title: drawText("Welcome! Press Enter to continue!", 20, screenHeight-60, 40, LightGray)
   # don't want to repeat the same code for rendering gameplay in pause screen
   elif currentScreen == gameplay or currentScreen == pause: 
-    drawText("*Blows up pancakes with mind*\n\n\nPress Enter to open the pause screen.", 20, screenHeight-100, 40, LightGray)
+    #drawText("*Blows up pancakes with mind*\n\n\nPress Enter to open the pause screen.", 20, screenHeight-100, 40, LightGray)
     beginMode3D(camera)
     #drawModel(level, Vector3(x:0.0,y:0.0,z:0.0),4.0,White)
     #drawModel(floor, Vector3(x:(mapSize/2).float*wallSize,y:0.0,z:(mapSize/2).float*wallSize),1.0,White)
@@ -381,27 +383,56 @@ proc updateDrawFrame {.cdecl.} =
     drawCubeTextureRec(level_tex, Rectangle(x:0,y:0,width:16,height:16),Vector3(x:0.0,y: -wallSize/2.0,z:0.0),floorSize,floorSize,floorSize,(false,false,true,false,false,false),LightGray)
     for y in stage*mapSize..stage*mapSize+mapSize-1:
       for x in 0..mapSize-1:
-        if x != 19 and y != stage*mapSize+19 and x != 0 and y != stage*mapSize:
+        #if x != 19 and y != stage*mapSize+19 and x != 0 and y != stage*mapSize:
           if level[y*22+x] == '#':
-            let row = mapSize+2 # how many characters till next row in the map?
-            let front = not (level[y*row+x+row] == '#')
-            let back = not (level[y*row+x-row] == '#')
-            #let top = not (level[y*22+x] == '#')
-            #let bottom = not (level[y*22+x] == '#')
-            let right = not (level[y*row+x+1] == '#')
-            let left = not (level[y*row+x-1] == '#')
-            drawCubeTextureRec(level_tex, Rectangle(x:0,y:0,width:16,height:16),Vector3(x:x.float*wallSize,y:wallSize/2.0,z:y.float*wallSize),wallSize,wallSize,wallSize,(front,back,false,false,right,left),White)
-          else:
+            if cam_angle == 0.0 and x != 19 and y != stage*mapSize+19:
+              let row = mapSize+2 # how many characters till next row in the map?
+              let front = not (level[y*row+x+row] == '#' or level[y*row+x+row] == '/')
+              #let back = not (level[y*row+x-row] == '#')
+              #let top = not (level[y*22+x] == '#')
+              #let bottom = not (level[y*22+x] == '#')
+              let right = not (level[y*row+x+1] == '#' or level[y*row+x+1] == '/')
+              #let left = not (level[y*row+x-1] == '#')
+              drawCubeTextureRec(level_tex, Rectangle(x:0,y:0,width:16,height:16),Vector3(x:x.float*wallSize,y:wallSize/2.0,z:y.float*wallSize),wallSize,wallSize,wallSize,(front,false,false,false,right,false),White)
+            elif cam_angle == PI/2.0:
+              let row = mapSize+2 # how many characters till next row in the map?
+              let front = not (level[y*row+x+row] == '#')
+              let back = not (level[y*row+x-row] == '#')
+              #let top = not (level[y*22+x] == '#')
+              #let bottom = not (level[y*22+x] == '#')
+              let right = not (level[y*row+x+1] == '#')
+              let left = not (level[y*row+x-1] == '#')
+              drawCubeTextureRec(level_tex, Rectangle(x:0,y:0,width:16,height:16),Vector3(x:x.float*wallSize,y:wallSize/2.0,z:y.float*wallSize),wallSize,wallSize,wallSize,(front,false,false,false,false,left),White)
+            elif cam_angle == PI and x != 0 and y != stage*mapSize:
+              let row = mapSize+2 # how many characters till next row in the map?
+              #let front = not (level[y*row+x+row] == '#')
+              let back = not (level[y*row+x-row] == '#')
+              #let top = not (level[y*22+x] == '#')
+              #let bottom = not (level[y*22+x] == '#')
+              #let right = not (level[y*row+x+1] == '#')
+              let left = not (level[y*row+x-1] == '#')
+              drawCubeTextureRec(level_tex, Rectangle(x:0,y:0,width:16,height:16),Vector3(x:x.float*wallSize,y:wallSize/2.0,z:y.float*wallSize),wallSize,wallSize,wallSize,(false,back,false,false,false,left),White)
+            elif cam_angle == PI*1.5:
+              let row = mapSize+2 # how many characters till next row in the map?
+              let front = not (level[y*row+x+row] == '#')
+              let back = not (level[y*row+x-row] == '#')
+              #let top = not (level[y*22+x] == '#')
+              #let bottom = not (level[y*22+x] == '#')
+              let right = not (level[y*row+x+1] == '#')
+              let left = not (level[y*row+x-1] == '#')
+              drawCubeTextureRec(level_tex, Rectangle(x:0,y:0,width:16,height:16),Vector3(x:x.float*wallSize,y:wallSize/2.0,z:y.float*wallSize),wallSize,wallSize,wallSize,(front,back,false,false,right,left),White)
+          elif level[y*22+x] == ' ' or level[y*22+x] == '2':
             drawCubeTextureRec(level_tex, Rectangle(x:0,y:0,width:16,height:16),Vector3(x:x.float*wallSize,y: -8.0,z:y.float*wallSize),wallSize,wallSize,wallSize,(false,false,true,false,false,false),LightGray)
     endMode3D()
-    for y in stage*mapSize..stage*mapSize+19:
+    # 2d minimap for debugging purposes. Might leave it in the game because it's aesthetically pleasing
+    #[for y in stage*mapSize..stage*mapSize+19:
       for x in 0..19:
         if level[y*22+x] == '#':
           drawRectangle(Vector2(x:x.float*wallSize,y:y.float*wallSize),Vector2(x:wallSize,y:wallSize),White)
     drawRectangle(Vector2(y:floor((players[0].pos.z-players[0].size.z/2.0+wallSize/2.0)/wallSize)*wallSize,x:floor((players[0].pos.x.float-players[0].size.x/2.0+wallSize/2.0)/wallSize)*wallSize),Vector2(x:wallSize,y:wallSize),Green)
     drawRectangle(Vector2(y:floor((players[0].pos.z+players[0].size.z/2.0+wallSize/2.0)/wallSize)*wallSize,x:floor((players[0].pos.x.float-players[0].size.x/2.0+wallSize/2.0)/wallSize)*wallSize),Vector2(x:wallSize,y:wallSize),Green)
     drawRectangle(Vector2(y:floor((players[0].pos.z-players[0].size.z/2.0+wallSize/2.0)/wallSize)*wallSize,x:floor((players[0].pos.x.float+players[0].size.x/2.0+wallSize/2.0)/wallSize)*wallSize),Vector2(x:wallSize,y:wallSize),Green)
-    drawRectangle(Vector2(y:floor((players[0].pos.z+players[0].size.z/2.0+wallSize/2.0)/wallSize)*wallSize,x:floor((players[0].pos.x.float+players[0].size.x/2.0+wallSize/2.0)/wallSize)*wallSize),Vector2(x:wallSize,y:wallSize),Green)
+    drawRectangle(Vector2(y:floor((players[0].pos.z+players[0].size.z/2.0+wallSize/2.0)/wallSize)*wallSize,x:floor((players[0].pos.x.float+players[0].size.x/2.0+wallSize/2.0)/wallSize)*wallSize),Vector2(x:wallSize,y:wallSize),Green)]#
   # pause screen
   if currentScreen == pause:
     drawRectangle(0,0,screenWidth,screenHeight,Color(r:0,g:0,b:0,a:96))
