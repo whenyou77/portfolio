@@ -17,7 +17,7 @@
 #
 # ****************************************************************************************
 
-import raylib, raymath, reasings, std/math, os, rlgl
+import raylib, raymath, reasings, std/math, os, rlgl, std/strutils
 
 # ----------------------------------------------------------------------------------------
 # Global Variables Definition
@@ -36,46 +36,60 @@ type
     down = 2
     left = 3
   CollectibleType = enum
-    carrot
-    bananaSlice
+    carrot # C
+    banana # B
+    dubloon # D
+  EnemyType = enum
+    possum # O
+    crow # K
+    jeopard # J
   Thing = object of RootObj
     pos: Vector3
     size: Vector3
   Collectible = object of Thing
-    collectible_type: CollectibleType
-    vel: Vector3
+    collectibleType: CollectibleType
   Actor = object of Thing
     vel: Vector3
+    ext_vel: Vector3
     hp: float
     grounded: bool
-  Solid = object of Thing
-  Player = object of Actor
     att_cooldown: int
-    att_vel: Vector2 # when you attack, you charge
-  Wall = object of Solid
+  Solid = object of Thing
+  Enemy = object of Actor
+    enemyType: EnemyType
+  Player = object of Actor # P
+    charge_vel: Vector2 # when you attack, you charge. This is the velocity exerted on the player
+    charge_cooldown: int
+    bananized: bool
+    dubloons_held: int
+  Wall = object of Solid # #
 const
   screenWidth = 960
   screenHeight = 960
   cameraZoom = 56.0 # how far is the camera from the player? Base: 56
   wallSize = 16.0
+  playerMaxHp = 100.0
 
 var currentScreen = title
 var nextScreen = title
 var fadeAlpha = 0.0
-var fadeTimer = 60
+var fadeTimer = 0
 var fadeOut = false
-var fadeInLen = 60
-var fadeOutLen = 60
+var fadeInLen = 0
+var fadeOutLen = 0
 var transitioning = false
 var inElevator = false
 var stage = 0
 var mapSize = 20 # the map is always square
-var cam_angle = up
-var carrotsHeld = 0
+var row = mapSize+2 # how many characters till next row in the map? (\n also counts)
+var carrotsHeld = 0 # carrots are shared
+var startingCarrots = 0 # how many carrots were held when the stage ended?
+var advance = false # switch to next stage?
 
 var players: array[4,Player]
 var walls: seq[Wall] = @[]
 var collectibles: seq[Collectible] = @[]
+var enemies: seq[Enemy] = @[]
 #var level: Model
 
 let level_template = readFile($getAppDir() & "\\lvl.txt")
@@ -116,6 +130,12 @@ x2: float, y2: float, z2: float, w2: float, h2: float, d2: float): bool =
       return true
   false
 
+proc circle_collision(pos1: Vector2, rad1: float, pos2:Vector2, rad2: float): bool =
+  let dx = abs(pos1.x-pos2.x)
+  let dy = abs(pos1.y-pos2.y)
+  if sqrt(dx*dx+dy*dy) <= rad1+rad2: return true
+  else: return false
+
 # Draw cube with texture piece applied to all faces
 proc drawCubeTextureRec(texture: Texture2D, source: Rectangle, position: Vector3, width: float, height: float, length: float, faces: (bool,bool,bool,bool,bool,bool), color: Color) =
 
@@ -145,7 +165,7 @@ proc drawCubeTextureRec(texture: Texture2D, source: Rectangle, position: Vector3
       texCoord2f(source.x/texWidth, source.y/texHeight)
       vertex3f(x - width/2, y + height/2, z + length/2)
 
-        # Back face\
+        # Back face
     if faces[1]:
       normal3f(0.0, 0.0, -1.0)
       texCoord2f((source.x + source.width)/texWidth, (source.y + source.height)/texHeight)
@@ -209,32 +229,6 @@ proc drawCubeTextureRec(texture: Texture2D, source: Rectangle, position: Vector3
 
     setTexture(0)
 
-# Rotates the camera around its up vector
-# Yaw is "looking left and right"
-# If rotateAroundTarget is false, the camera rotates around its position
-# Note: angle must be provided in radians
-proc cameraYaw(camera: var Camera, angle: float, rotateAroundTarget: bool) =
-
-    # Rotation axis
-    var up = camera.up.normalize()
-
-    # View vector
-    var targetPosition = camera.target-camera.position
-
-    # Rotate view vector around up axis
-    targetPosition = rotateByAxisAngle(targetPosition, up, angle)
-
-    if rotateAroundTarget:
-    
-        # Move position relative to target
-        camera.position = camera.target-targetPosition
-    
-    else: # rotate around camera.position
-    
-        # Move target relative to position
-        camera.target = camera.position+targetPosition
-
-
 # ----------------------------------------------------------------------------------------
 # Module functions Definition
 # ----------------------------------------------------------------------------------------
@@ -246,123 +240,245 @@ proc updateDrawFrame {.cdecl.} =
   # Game logic
   case currentScreen:
     of gameplay:
-      # i is the player id
-      for i,p in players.mpairs:
-        if p.att_cooldown > 0: 
-          p.att_cooldown -= 1
-        if p.vel.y > -2.0: p.vel.y -= 0.04
-        if i == 0:
-          if p.att_vel.x == 0.0 and p.att_vel.y == 0.0:
-            if isKeyDown(D) or isKeyDown(Right):
-              if p.vel.x < 0.5: p.vel.x += 0.075
-            elif isKeyDown(A) or isKeyDown(Left):
-              if p.vel.x > -0.5: p.vel.x -= 0.075
-            else:
-              if p.vel.x > 0.0: 
-                p.vel.x -= 0.05
-                if p.vel.x < 0.0:
-                  p.vel.x = 0.0
-              elif p.vel.x < 0.0: 
-                p.vel.x += 0.05
-                if p.vel.x > 0.0:
-                  p.vel.x = 0.0
-            if isKeyDown(S) or isKeyDown(Down):
-              if p.vel.z < 0.5: p.vel.z += 0.075
-            elif isKeyDown(W) or isKeyDown(Up):
-              if p.vel.z > -0.5: p.vel.z -= 0.075
-            else:
-              if p.vel.z > 0.0: 
-                p.vel.z -= 0.05
-                if p.vel.z < 0.0:
-                  p.vel.z = 0.0
-              elif p.vel.z < 0.0: 
-                p.vel.z += 0.05
-                if p.vel.z > 0.0:
-                  p.vel.z = 0.0
-          if isKeyPressed(Space) and p.grounded: p.vel.y = 1.0
-          if isMouseButtonPressed(MouseButton.Left) and p.att_cooldown == 0 and (p.vel.x != 0.0 or p.vel.z != 0.0): 
-            p.att_cooldown = 60
-            p.vel.y = 0.0
-            p.att_vel = Vector2(x:1.0*p.vel.x.sgn().float,y:1.0*p.vel.z.sgn().float)
-        p.grounded = false
-        let row = (mapSize+2).float # how many characters till next row in the map?
-        p.pos.x += p.vel.x+p.att_vel.x
-        if level[(floor((p.pos.z-p.size.z/2.0+wallSize/2.0)/wallSize)*row+floor((p.pos.x.float-p.size.x/2.0+wallSize/2.0)/wallSize)).int] == '#' or level[(floor((p.pos.z.float+p.size.z/2.0+wallSize/2.0)/wallSize)*row+floor((p.pos.x.float-p.size.x/2.0+wallSize/2.0)/wallSize)).int] == '#':
-          p.pos.x = (floor((p.pos.x.float-p.size.x/2.0+wallSize/2.0)/wallSize))*wallSize+wallSize/2.0+p.size.x/2.0
-          p.vel.x = 0.0
-        elif level[(floor((p.pos.z+p.size.z/2.0+wallSize/2.0)/wallSize)*row+floor((p.pos.x.float+p.size.x/2.0+wallSize/2.0)/wallSize)).int] == '#' or level[(floor((p.pos.z.float-p.size.z/2.0+wallSize/2.0)/wallSize)*row+floor((p.pos.x.float+p.size.x/2.0+wallSize/2.0)/wallSize)).int] == '#':
-          p.pos.x = (floor((p.pos.x.float+p.size.x/2.0+wallSize/2.0)/wallSize))*wallSize-wallSize/2.0-p.size.x/2.0-0.0001
-          p.vel.x = 0.0
-        for w in walls:
-          if aabbcc(p.pos.x,p.pos.z,p.pos.y,p.size.x,p.size.z,p.size.y,w.pos.x,w.pos.z,w.pos.y,w.size.x,w.size.z,w.size.y):
-            if p.pos.x > w.pos.x:
-              p.pos.x = w.pos.x+w.size.x/2.0+p.size.x/2.0
-            else:
-              p.pos.x = w.pos.x-w.size.x/2.0-p.size.x/2.0
-            p.vel.x = 0.0
-        p.pos.z += p.vel.z+p.att_vel.y
-        if level[(floor((p.pos.z-p.size.z/2.0+wallSize/2.0)/wallSize)*row+floor((p.pos.x.float-p.size.x/2.0+wallSize/2.0)/wallSize)).int] == '#' or level[(floor((p.pos.z.float-p.size.z/2.0+wallSize/2.0)/wallSize)*row+floor((p.pos.x.float+p.size.x/2.0+wallSize/2.0)/wallSize)).int] == '#':
-          p.pos.z = (floor((p.pos.z.float-p.size.z/2.0+wallSize/2.0)/wallSize))*wallSize+wallSize/2.0+p.size.z/2.0
-          p.vel.z = 0.0
-        elif level[(floor((p.pos.z+p.size.z/2.0+wallSize/2.0)/wallSize)*row+floor((p.pos.x.float-p.size.x/2.0+wallSize/2.0)/wallSize)).int] == '#' or level[(floor((p.pos.z.float+p.size.z/2.0+wallSize/2.0)/wallSize)*row+floor((p.pos.x.float+p.size.x/2.0+wallSize/2.0)/wallSize)).int] == '#':
-          p.pos.z = (floor((p.pos.z.float+p.size.z/2.0+wallSize/2.0)/wallSize))*wallSize-wallSize/2.0-p.size.z/2.0-0.0001
-          p.vel.z = 0.0
-        if level[(floor((p.pos.z+wallSize/2.0)/wallSize)*row+floor((p.pos.x.float+wallSize/2.0)/wallSize)).int] == 'E':
-          let rec1 = Rectangle(x:floor((p.pos.x.float+wallSize/2.0)/wallSize)*wallSize-wallSize/2.0,y:floor((p.pos.z+wallSize/2.0)/wallSize)*wallSize-wallSize/2.0,width:wallSize,height:wallSize)
-          let rec2 = Rectangle(x:p.pos.x-p.size.x/2.0,y:p.pos.z-p.size.z/2.0,width:p.size.x,height:p.size.y)
-          let coll = getCollisionRec(rec1,rec2)
-          if coll.width*coll.height == p.size.x*p.size.z:
-            stage+=1
-        for w in walls:
-          if aabbcc(p.pos.x,p.pos.z,p.pos.y,p.size.x,p.size.z,p.size.y,w.pos.x,w.pos.z,w.pos.y,w.size.x,w.size.z,w.size.y):
-            if p.pos.z > w.pos.z:
-              p.pos.z = w.pos.z+w.size.z/2.0+p.size.z/2.0
-            else:
-              p.pos.z = w.pos.z-w.size.z/2.0-p.size.z/2.0
-            p.vel.z = 0.0
-        # att_vel x friction
-        if p.att_vel.x > 0.0: 
-          p.vel.y = 0.0
-          p.att_vel.x -= 0.05
-          if p.att_vel.x < 0.0:
-            p.att_vel.x = 0.0
-        elif p.att_vel.x < 0.0: 
-          p.vel.y = 0.0
-          p.att_vel.x += 0.05
-          if p.att_vel.x > 0.0:
-            p.att_vel.x = 0.0
-        # att_vel z friction (y, beacuse it's a vector2)
-        if p.att_vel.y > 0.0: 
-          p.vel.y = 0.0
-          p.att_vel.y -= 0.05
-          if p.att_vel.y < 0.0:
-            p.att_vel.y = 0.0
-        elif p.att_vel.y < 0.0: 
-          p.vel.y = 0.0
-          p.att_vel.y += 0.05
-          if p.att_vel.y > 0.0:
-            p.att_vel.y = 0.0
-        p.pos.y += p.vel.y
-        for w in walls:
-          if aabbcc(p.pos.x,p.pos.z,p.pos.y,p.size.x,p.size.z,p.size.y,w.pos.x,w.pos.z,w.pos.y,w.size.x,w.size.z,w.size.y):
-            if p.pos.y > w.pos.y:
-              p.pos.y = w.pos.y+w.size.y/2.0+p.size.y/2.0
+      if not transitioning:
+
+        # PLAYER
+
+        var elevatorPlayers = 0
+        
+        # i is the player id
+
+        for i,p in players.mpairs:
+          var velMod = 1.0
+          if p.bananized: velMod = 1.2
+          if p.charge_cooldown > 0: 
+            p.charge_cooldown -= 1
+          if p.att_cooldown > 0: 
+            p.att_cooldown -= 1
+          if p.vel.y > -2.0: p.vel.y -= 0.04
+          if i == 0:
+            if p.charge_vel.x == 0.0 and p.charge_vel.y == 0.0:
+              if isKeyDown(D) or isKeyDown(Right):
+                if p.vel.x < 0.5*velMod: p.vel.x += 0.075*velMod
+              elif isKeyDown(A) or isKeyDown(Left):
+                if p.vel.x > -0.5*velMod: p.vel.x -= 0.075*velMod
+              else:
+                if p.vel.x > 0.0: 
+                  p.vel.x -= 0.05*velMod
+                  if p.vel.x < 0.0:
+                    p.vel.x = 0.0
+                elif p.vel.x < 0.0: 
+                  p.vel.x += 0.05*velMod
+                  if p.vel.x > 0.0:
+                    p.vel.x = 0.0
+              if isKeyDown(S) or isKeyDown(Down):
+                if p.vel.z < 0.5*velMod: p.vel.z += 0.075*velMod
+              elif isKeyDown(W) or isKeyDown(Up):
+                if p.vel.z > -0.5*velMod: p.vel.z -= 0.075*velMod
+              else:
+                if p.vel.z > 0.0: 
+                  p.vel.z -= 0.05*velMod
+                  if p.vel.z < 0.0:
+                    p.vel.z = 0.0
+                elif p.vel.z < 0.0: 
+                  p.vel.z += 0.05*velMod
+                  if p.vel.z > 0.0:
+                    p.vel.z = 0.0
+            if isKeyPressed(Space) and p.grounded: p.vel.y = 1.0
+            if (isMouseButtonPressed(MouseButton.Right) or isKeyPressed(X) or isKeyPressed(O)) and p.charge_cooldown == 0 and (p.vel.x != 0.0 or p.vel.z != 0.0): 
+              p.charge_cooldown = 300
               p.vel.y = 0.0
-              p.grounded = true
+              p.charge_vel = Vector2(x:1.0*p.vel.x.sgn().float,y:1.0*p.vel.z.sgn().float)
+            if (isMouseButtonPressed(MouseButton.Left) or isKeyPressed(C) or isKeyPressed(P)) and p.att_cooldown == 0: 
+              p.att_cooldown = 50
+              let radius = sqrt(2.0)+1.0
+              for e in enemies.mitems:
+                if checkCollisionCircleRec(Vector2(x:p.pos.x,y:p.pos.z),radius.float32,Rectangle(x:e.pos.x,y:e.pos.z,width:e.size.x,height:e.size.z)):
+                  e.hp -= 10.0
+            if isKeyPressed(KeyboardKey.E) and carrotsHeld > 0 and p.hp < playerMaxHp:
+              carrotsHeld -= 1
+              p.hp += 10.0
+          p.grounded = false
+          p.pos.x += p.vel.x+p.charge_vel.x
+          let rowFloat = row.float
+          if level[(floor((p.pos.z-p.size.z/2.0+wallSize/2.0)/wallSize)*rowFloat+floor((p.pos.x.float-p.size.x/2.0+wallSize/2.0)/wallSize)).int] == '#' or level[(floor((p.pos.z.float+p.size.z/2.0+wallSize/2.0)/wallSize)*rowFloat+floor((p.pos.x.float-p.size.x/2.0+wallSize/2.0)/wallSize)).int] == '#':
+            p.pos.x = (floor((p.pos.x.float-p.size.x/2.0+wallSize/2.0)/wallSize))*wallSize+wallSize/2.0+p.size.x/2.0
+            p.vel.x = 0.0
+          elif level[(floor((p.pos.z+p.size.z/2.0+wallSize/2.0)/wallSize)*rowFloat+floor((p.pos.x.float+p.size.x/2.0+wallSize/2.0)/wallSize)).int] == '#' or level[(floor((p.pos.z.float-p.size.z/2.0+wallSize/2.0)/wallSize)*rowFloat+floor((p.pos.x.float+p.size.x/2.0+wallSize/2.0)/wallSize)).int] == '#':
+            p.pos.x = (floor((p.pos.x.float+p.size.x/2.0+wallSize/2.0)/wallSize))*wallSize-wallSize/2.0-p.size.x/2.0-0.0001
+            p.vel.x = 0.0
+          for w in walls:
+            if aabbcc(p.pos.x,p.pos.z,p.pos.y,p.size.x,p.size.z,p.size.y,w.pos.x,w.pos.z,w.pos.y,w.size.x,w.size.z,w.size.y):
+              if p.pos.x > w.pos.x:
+                p.pos.x = w.pos.x+w.size.x/2.0+p.size.x/2.0
+              else:
+                p.pos.x = w.pos.x-w.size.x/2.0-p.size.x/2.0
+              p.vel.x = 0.0
+          p.pos.z += p.vel.z+p.charge_vel.y
+          if level[(floor((p.pos.z-p.size.z/2.0+wallSize/2.0)/wallSize)*rowFloat+floor((p.pos.x.float-p.size.x/2.0+wallSize/2.0)/wallSize)).int] == '#' or level[(floor((p.pos.z.float-p.size.z/2.0+wallSize/2.0)/wallSize)*rowFloat+floor((p.pos.x.float+p.size.x/2.0+wallSize/2.0)/wallSize)).int] == '#':
+            p.pos.z = (floor((p.pos.z.float-p.size.z/2.0+wallSize/2.0)/wallSize))*wallSize+wallSize/2.0+p.size.z/2.0
+            p.vel.z = 0.0
+          elif level[(floor((p.pos.z+p.size.z/2.0+wallSize/2.0)/wallSize)*rowFloat+floor((p.pos.x.float-p.size.x/2.0+wallSize/2.0)/wallSize)).int] == '#' or level[(floor((p.pos.z.float+p.size.z/2.0+wallSize/2.0)/wallSize)*rowFloat+floor((p.pos.x.float+p.size.x/2.0+wallSize/2.0)/wallSize)).int] == '#':
+            p.pos.z = (floor((p.pos.z.float+p.size.z/2.0+wallSize/2.0)/wallSize))*wallSize-wallSize/2.0-p.size.z/2.0-0.0001
+            p.vel.z = 0.0
+          if level[(floor((p.pos.z+wallSize/2.0)/wallSize)*rowFloat+floor((p.pos.x.float+wallSize/2.0)/wallSize)).int] == 'E':
+            let rec1 = Rectangle(x:floor((p.pos.x.float+wallSize/2.0)/wallSize)*wallSize-wallSize/2.0,y:floor((p.pos.z+wallSize/2.0)/wallSize)*wallSize-wallSize/2.0,width:wallSize,height:wallSize)
+            let rec2 = Rectangle(x:p.pos.x-p.size.x/2.0,y:p.pos.z-p.size.z/2.0,width:p.size.x,height:p.size.z)
+            let coll = getCollisionRec(rec1,rec2)
+            if coll.width*coll.height == p.size.x*p.size.z:
+              elevatorPlayers+=1
+              echo stage
+          if level[(floor((p.pos.z+wallSize/2.0)/wallSize)*rowFloat+floor((p.pos.x.float+wallSize/2.0)/wallSize)).int] == '/':
+              level[(floor((p.pos.z+wallSize/2.0)/wallSize)*rowFloat+floor((p.pos.x.float+wallSize/2.0)/wallSize)).int] = ' '
+          for w in walls:
+            if aabbcc(p.pos.x,p.pos.z,p.pos.y,p.size.x,p.size.z,p.size.y,w.pos.x,w.pos.z,w.pos.y,w.size.x,w.size.z,w.size.y):
+              if p.pos.z > w.pos.z:
+                p.pos.z = w.pos.z+w.size.z/2.0+p.size.z/2.0
+              else:
+                p.pos.z = w.pos.z-w.size.z/2.0-p.size.z/2.0
+              p.vel.z = 0.0
+          # charge_vel x friction
+          if p.charge_vel.x > 0.0: 
+            p.vel.y = 0.0
+            p.charge_vel.x -= 0.05
+            if p.charge_vel.x < 0.0:
+              p.charge_vel.x = 0.0
+          elif p.charge_vel.x < 0.0: 
+            p.vel.y = 0.0
+            p.charge_vel.x += 0.05
+            if p.charge_vel.x > 0.0:
+              p.charge_vel.x = 0.0
+          # charge_vel z friction (y, beacuse it's a vector2)
+          if p.charge_vel.y > 0.0: 
+            p.vel.y = 0.0
+            p.charge_vel.y -= 0.05
+            if p.charge_vel.y < 0.0:
+              p.charge_vel.y = 0.0
+          elif p.charge_vel.y < 0.0: 
+            p.vel.y = 0.0
+            p.charge_vel.y += 0.05
+            if p.charge_vel.y > 0.0:
+              p.charge_vel.y = 0.0
+          p.pos.y += p.vel.y
+          for w in walls:
+            if aabbcc(p.pos.x,p.pos.z,p.pos.y,p.size.x,p.size.z,p.size.y,w.pos.x,w.pos.z,w.pos.y,w.size.x,w.size.z,w.size.y):
+              if p.pos.y > w.pos.y:
+                p.pos.y = w.pos.y+w.size.y/2.0+p.size.y/2.0
+                p.grounded = true
+              else:
+                p.pos.y = w.pos.y-w.size.y/2.0-p.size.y/2.0
+              p.vel.y = 0.0
+          for n in 0..collectibles.len-1:
+            let c = collectibles[n]
+            if aabbcc(p.pos.x,p.pos.z,p.pos.y,p.size.x,p.size.z,p.size.y,c.pos.x,c.pos.z,c.pos.y,c.size.x,c.size.z,c.size.y):
+              collectibles.delete(n)
+              case c.collectible_type:
+              of carrot: carrotsHeld += 1
+              of banana: p.bananized = true
+              of dubloon: p.dubloons_held += 1
+              break
+          if p.pos.y < p.size.y/2.0: 
+            p.pos.y = p.size.y/2.0
+            p.vel.y = 0.0
+            p.grounded = true
+          if p.pos.y > wallSize-p.size.y/2.0:
+            p.pos.y = wallSize-p.size.y/2.0
+            p.vel.y = 0.0
+          p.hp = p.hp.clamp(0.0,playerMaxHp)
+        if elevatorPlayers==1:
+          advance = true
+          if stage+1 > 2:
+            transition(thxForPlaying,30,30)
+          else:
+            startingCarrots = carrotsHeld
+            transition(gameplay,30,30)
+          
+        if isKeyPressed(Enter): currentScreen = pause
+        if isKeyPressed(R): transition(gameplay,30,30)
+
+      # ENEMY
+
+      var deletion_queue: seq[int] = @[]
+      var deleted = 0
+
+      for i,e in enemies.mpairs:
+        if e.vel.y > -2.0: e.vel.y -= 0.04
+        let angleToPlayer = arctan2(players[0].pos.z-e.pos.z,players[0].pos.x-e.pos.x)
+        var velMod = 0.4
+        case e.enemyType:
+        of possum: velMod = 0.6
+        of jeopard: velMod = 0.5
+        of crow: velMod = 0.4 
+        e.vel.x = velMod*angleToPlayer.cos()
+        e.vel.z = velMod*angleToPlayer.sin()
+        e.pos.x += e.vel.x
+        let rowFloat = row.float
+        if level[(floor((e.pos.z-e.size.z/2.0+wallSize/2.0)/wallSize)*rowFloat+floor((e.pos.x.float-e.size.x/2.0+wallSize/2.0)/wallSize)).int] == '#' or level[(floor((e.pos.z.float+e.size.z/2.0+wallSize/2.0)/wallSize)*rowFloat+floor((e.pos.x.float-e.size.x/2.0+wallSize/2.0)/wallSize)).int] == '#':
+          e.pos.x = (floor((e.pos.x.float-e.size.x/2.0+wallSize/2.0)/wallSize))*wallSize+wallSize/2.0+e.size.x/2.0
+          e.vel.x = 0.0
+        elif level[(floor((e.pos.z+e.size.z/2.0+wallSize/2.0)/wallSize)*rowFloat+floor((e.pos.x.float+e.size.x/2.0+wallSize/2.0)/wallSize)).int] == '#' or level[(floor((e.pos.z.float-e.size.z/2.0+wallSize/2.0)/wallSize)*rowFloat+floor((e.pos.x.float+e.size.x/2.0+wallSize/2.0)/wallSize)).int] == '#':
+          e.pos.x = (floor((e.pos.x.float+e.size.x/2.0+wallSize/2.0)/wallSize))*wallSize-wallSize/2.0-e.size.x/2.0-0.0001
+          e.vel.x = 0.0
+        for w in walls:
+          if aabbcc(e.pos.x,e.pos.z,e.pos.y,e.size.x,e.size.z,e.size.y,w.pos.x,w.pos.z,w.pos.y,w.size.x,w.size.z,w.size.y):
+            if e.pos.x > w.pos.x:
+              e.pos.x = w.pos.x+w.size.x/2.0+e.size.x/2.0
             else:
-              p.pos.y = w.pos.y-w.size.y/2.0-p.size.y/2.0
-        if p.pos.y < p.size.y/2.0: 
-          p.pos.y = p.size.y/2.0
-          p.vel.y = 0.0
-          p.grounded = true
-        if p.pos.y > wallSize-p.size.y/2.0:
-          p.pos.y = wallSize-p.size.y/2.0
-          p.vel.y = 0.0
+              e.pos.x = w.pos.x-w.size.x/2.0-e.size.x/2.0
+            e.vel.x = 0.0
+        for e2 in enemies:
+          if e2 != e and aabbcc(e.pos.x,e.pos.z,e.pos.y,e.size.x,e.size.z,e.size.y,e2.pos.x,e2.pos.z,e2.pos.y,e2.size.x,e2.size.z,e2.size.y):
+            if e.pos.x > e2.pos.x:
+              e.pos.x = e2.pos.x+e2.size.x/2.0+e.size.x/2.0
+            else:
+              e.pos.x = e2.pos.x-e2.size.x/2.0-e.size.x/2.0
+            e.vel.x = 0.0
+        e.pos.z += e.vel.z
+        if level[(floor((e.pos.z-e.size.z/2.0+wallSize/2.0)/wallSize)*rowFloat+floor((e.pos.x.float-e.size.x/2.0+wallSize/2.0)/wallSize)).int] == '#' or level[(floor((e.pos.z.float-e.size.z/2.0+wallSize/2.0)/wallSize)*rowFloat+floor((e.pos.x.float+e.size.x/2.0+wallSize/2.0)/wallSize)).int] == '#':
+          e.pos.z = (floor((e.pos.z.float-e.size.z/2.0+wallSize/2.0)/wallSize))*wallSize+wallSize/2.0+e.size.z/2.0
+          e.vel.z = 0.0
+        elif level[(floor((e.pos.z+e.size.z/2.0+wallSize/2.0)/wallSize)*rowFloat+floor((e.pos.x.float-e.size.x/2.0+wallSize/2.0)/wallSize)).int] == '#' or level[(floor((e.pos.z.float+e.size.z/2.0+wallSize/2.0)/wallSize)*rowFloat+floor((e.pos.x.float+e.size.x/2.0+wallSize/2.0)/wallSize)).int] == '#':
+          e.pos.z = (floor((e.pos.z.float+e.size.z/2.0+wallSize/2.0)/wallSize))*wallSize-wallSize/2.0-e.size.z/2.0-0.0001
+          e.vel.z = 0.0
+        for w in walls:
+          if aabbcc(e.pos.x,e.pos.z,e.pos.y,e.size.x,e.size.z,e.size.y,w.pos.x,w.pos.z,w.pos.y,w.size.x,w.size.z,w.size.y):
+            if e.pos.z > w.pos.z:
+              e.pos.z = w.pos.z+w.size.z/2.0+e.size.z/2.0
+            else:
+              e.pos.z = w.pos.z-w.size.z/2.0-e.size.z/2.0
+            e.vel.z = 0.0
+        for e2 in enemies:
+          if e2 != e and aabbcc(e.pos.x,e.pos.z,e.pos.y,e.size.x,e.size.z,e.size.y,e2.pos.x,e2.pos.z,e2.pos.y,e2.size.x,e2.size.z,e2.size.y):
+            if e.pos.z > e2.pos.z:
+              e.pos.z = e2.pos.z+e2.size.z/2.0+e.size.z/2.0
+            else:
+              e.pos.z = e2.pos.z-e2.size.z/2.0-e.size.z/2.0
+            e.vel.z = 0.0
+        e.pos.y += e.vel.y
+        for w in walls:
+          if aabbcc(e.pos.x,e.pos.z,e.pos.y,e.size.x,e.size.z,e.size.y,w.pos.x,w.pos.z,w.pos.y,w.size.x,w.size.z,w.size.y):
+            if e.pos.y > w.pos.y:
+              e.pos.y = w.pos.y+w.size.y/2.0+e.size.y/2.0
+              e.grounded = true
+            else:
+              e.pos.y = w.pos.y-w.size.y/2.0-e.size.y/2.0
+              e.vel.y = 0.0
+        if e.pos.y < e.size.y/2.0: 
+          e.pos.y = e.size.y/2.0
+          e.vel.y = 0.0
+          e.grounded = true
+        if e.pos.y > wallSize-e.size.y/2.0:
+          e.pos.y = wallSize-e.size.y/2.0
+          e.vel.y = 0.0
+        if e.hp <= 0.0: deletion_queue.add(i)
+
+      for d in deletion_queue:
+        enemies.del(d-deleted)
+        deleted+=1
+      # camera controls
+
       camera.position = players[0].pos + Vector3(x:cameraZoom,y:cameraZoom,z:cameraZoom)
       camera.target = players[0].pos
-      camera.cameraYaw(cam_angle.int.float*PI/2.0,true)
-      if isKeyPressed(Enter): currentScreen = pause
-      if isKeyPressed(R): transition(gameplay,30,30)
     of pause:
       if isKeyPressed(Enter): currentScreen = gameplay
       if isKeyPressed(Backspace): transition(title,30,30)
@@ -393,52 +509,91 @@ proc updateDrawFrame {.cdecl.} =
       fadeOut = true
       fadeTimer=fadeOutLen
       currentScreen = nextScreen
+      camera.position = Vector3()
       case currentScreen:
-        of gameplay: 
-          #[for y in stage*mapSize..stage*mapSize+mapSize-1:
-            for x in 0..mapSize-1:
-              if level[y*22+x] == '#':
-                walls.add(Wall(pos:Vector3(x:x.float*wallSize,y:wallSize/2.0,z:y.float*wallSize),size:Vector3(x:wallSize,y:wallSize,z:wallSize)))]#
-          cam_angle = up
+        of gameplay:
+          level = level_template
+          carrotsHeld = startingCarrots
+          collectibles = @[]
+          enemies = @[]
+          walls = @[]
+          if advance: 
+            stage += 1
+            advance = false
           for y in stage*mapSize..stage*mapSize+mapSize-1:
             for x in 0..mapSize-1:
-              if level[y*(mapSize+2)+x] == '2':
-                players[0] = Player(pos:Vector3(x: x.float*wallSize-1.0,y:1.0,z: y.float*wallSize-1.0),size:Vector3(x:2.0,y:2.0,z:2.0),vel:Vector3(),hp:100,att_cooldown:0)
-                players[1] = Player(pos:Vector3(x: x.float*wallSize+1.0,y:1.0,z: y.float*wallSize-1.0),size:Vector3(x:2.0,y:2.0,z:2.0),vel:Vector3(),hp:100,att_cooldown:0)
-                players[2] = Player(pos:Vector3(x: x.float*wallSize-1.0,y:1.0,z: y.float*wallSize+1.0),size:Vector3(x:2.0,y:2.0,z:2.0),vel:Vector3(),hp:100,att_cooldown:0)
-                players[3] = Player(pos:Vector3(x: x.float*wallSize+1.0,y:1.0,z: y.float*wallSize+1.0),size:Vector3(x:2.0,y:2.0,z:2.0),vel:Vector3(),hp:100,att_cooldown:0)
+              let cell = level[y*(mapSize+2)+x].toUpperAscii()
+              if cell == 'P':
+                players[0] = Player(pos:Vector3(x: x.float*wallSize-2.0,y:1.5,z: y.float*wallSize-2.0),size:Vector3(x:2.0,y:3.0,z:2.0),vel:Vector3(),hp:playerMaxHp,att_cooldown:0)
+                players[1] = Player(pos:Vector3(x: x.float*wallSize+2.0,y:1.5,z: y.float*wallSize-2.0),size:Vector3(x:2.0,y:3.0,z:2.0),vel:Vector3(),hp:playerMaxHp,att_cooldown:0)
+                players[2] = Player(pos:Vector3(x: x.float*wallSize-2.0,y:1.5,z: y.float*wallSize+2.0),size:Vector3(x:2.0,y:3.0,z:2.0),vel:Vector3(),hp:playerMaxHp,att_cooldown:0)
+                players[3] = Player(pos:Vector3(x: x.float*wallSize+2.0,y:1.5,z: y.float*wallSize+2.0),size:Vector3(x:2.0,y:3.0,z:2.0),vel:Vector3(),hp:playerMaxHp,att_cooldown:0)
                 break
-              if level[y*(mapSize+2)+x] == 'w':
+              elif level[y*(mapSize+2)+x] == 'w':
                 walls.add(Wall(pos:Vector3(x: x.float*wallSize,y:wallSize/4.0,z: y.float*wallSize),size:Vector3(x:wallSize,y:wallSize/2.0,z:2.0)))
+              elif cell == 'C':
+                collectibles.add(Collectible(pos:Vector3(x: x.float*wallSize,y:2.0,z: y.float*wallSize),size:Vector3(x:2.0,y:2.0,z:2.0),collectible_type:carrot))
+              elif cell == 'B':
+                collectibles.add(Collectible(pos:Vector3(x: x.float*wallSize,y:2.0,z: y.float*wallSize),size:Vector3(x:2.0,y:2.0,z:2.0),collectible_type:banana))
+              elif cell == 'D':
+                collectibles.add(Collectible(pos:Vector3(x: x.float*wallSize,y:2.0,z: y.float*wallSize),size:Vector3(x:1.0,y:2.0,z:2.0),collectible_type:dubloon))
+              elif cell == 'J':
+                enemies.add(Enemy(pos:Vector3(x: x.float*wallSize,y:2.5,z: y.float*wallSize),size:Vector3(x:7.0,y:5.0,z:5.0),enemyType:jeopard,hp:50.0))
+              elif cell == 'K':
+                enemies.add(Enemy(pos:Vector3(x: x.float*wallSize,y:0.75,z: y.float*wallSize),size:Vector3(x:1.5,y:1.5,z:1.5),enemyType:crow,hp:10.0))
+              elif cell == 'O':
+                enemies.add(Enemy(pos:Vector3(x: x.float*wallSize,y:0.75,z: y.float*wallSize),size:Vector3(x:3.0,y:1.5,z:1.5),enemyType:possum,hp:20.0))
+              if cell != 'W' and level[y*(mapSize+2)+x].isLowerAscii():
+                level[y*(mapSize+2)+x] = '/'
+        of title:
+          advance = false
+          stage = 0
+          carrotsHeld = 0
+          startingCarrots = 0
         else: camera.position = Vector3()
   # --------------------------------------------------------------------------------------
   # Draw
   # --------------------------------------------------------------------------------------
   beginDrawing()
   clearBackground(Color(r:8,g:8,b:16,a:255))
-  if currentScreen == title: drawText("Welcome! Press Enter to continue!", 20, screenHeight-60, 40, White)
+  if currentScreen == title: drawText("Welcome! Press Enter to begin!", 20, screenHeight-60, 40, White)
   elif currentScreen == gameOver: drawText("You were defeated! Press R to restart.", 20, screenHeight-60, 40, Red)
+  elif currentScreen == thxForPlaying: drawText("Thank you for playing!\n\n\nPress Enter to return to the title screen.", 20, screenHeight-100, 40, White)
   # don't want to repeat the same code for rendering gameplay in pause screen
   elif currentScreen == gameplay or currentScreen == pause: 
-    #drawText("*Blows up pancakes with mind*\n\n\nPress Enter to open the pause screen.", 20, screenHeight-100, 40, LightGray)
+
+    # GAMEPLAY
+
     beginMode3D(camera)
-    #drawModel(level, Vector3(x:0.0,y:0.0,z:0.0),4.0,White)
-    #drawModel(floor, Vector3(x:(mapSize/2).float*wallSize,y:0.0,z:(mapSize/2).float*wallSize),1.0,White)
     for i,p in players.pairs:
-      #drawRectangle(p.pos,p.size,Green)
       drawCube(p.pos,p.size,Green)
       let groundpos = 0.0 # shadow's y (ground height)
-      drawCircle3D(Vector3(x:p.pos.x,y:0.1,z:p.pos.z),2.0-(p.pos.y-groundpos)/10.0,Vector3(x:1.0),90.0,Black)
-      #drawCubeWires(p.pos,p.size*1.5,Blue)
-      #drawGrid(1000,2.0)
-      #drawCube(w.pos,w.size,Red)
+      let radius = sqrt(p.size.x/2.0*p.size.x/2.0+p.size.z/2.0*p.size.z/2.0)+0.5
+      drawCylinder(Vector3(x:p.pos.x,y:0.1,z:p.pos.z),radius-(p.pos.y-groundpos)/10.0,radius-(p.pos.y-groundpos)/10.0,0.0,20,Black)
     for w in walls:
-      drawCube(w.pos,w.size,LightGray)
-    let floorSize = wallSize*mapSize.float
-    drawCubeTextureRec(level_tex, Rectangle(x:0,y:0,width:16,height:16),Vector3(x:0.0,y: -wallSize/2.0,z:0.0),floorSize,floorSize,floorSize,(false,false,true,false,false,false),LightGray)
+      drawCubeTextureRec(level_tex, Rectangle(x:0,y:8,width:16,height:8),w.pos,w.size.x,w.size.y,w.size.z,(true,true,true,true,true,true),White)
+    for c in collectibles:
+      let mapIndex = level[floor((c.pos.z.float+wallSize/2.0)/wallSize).int*row+floor((c.pos.x.float+wallSize/2.0)/wallSize).int] # on which index of the map is the collectible placed on?
+      if not (mapIndex == '/'):
+        case c.collectible_type:
+        of carrot: drawCube(c.pos,c.size,Orange)
+        of banana: drawCube(c.pos,c.size,Yellow)
+        of dubloon: drawCube(c.pos,c.size,Gold)
+        let groundpos = 0.0 # shadow's y (ground height)
+        let radius = sqrt(c.size.x/2.0*c.size.x/2.0+c.size.z/2.0*c.size.z/2.0)+0.5
+        drawCylinder(Vector3(x:c.pos.x,y:0.1,z:c.pos.z),radius-(c.pos.y-groundpos)/10.0,radius-(c.pos.y-groundpos)/10.0,0.0,20,Black)
+    for e in enemies:
+      let mapIndex = level[floor((e.pos.z.float+wallSize/2.0)/wallSize).int*row+floor((e.pos.x.float+wallSize/2.0)/wallSize).int] # on which index of the map is the collectible placed on?
+      if not (mapIndex == '/'):
+        case e.enemyType:
+        of crow: drawCube(e.pos,e.size,Black)
+        of jeopard: drawCube(e.pos,e.size,Gold)
+        of possum: drawCube(e.pos,e.size,Gray)
+        let groundpos = 0.0 # shadow's y (ground height)
+        let radius = sqrt(e.size.x/2.0*e.size.x/2.0+e.size.z/2.0*e.size.z/2.0)+0.5
+        drawCylinder(Vector3(x:e.pos.x,y:0.1,z:e.pos.z),radius-(e.pos.y-groundpos)/10.0,radius-(e.pos.y-groundpos)/10.0,0.0,20,Black)
     for y in stage*mapSize..stage*mapSize+mapSize-1:
       for x in 0..mapSize-1:
-        let row = mapSize+2 # how many characters till next row in the map?
         if not (level[y*row+x] == '/'):
           if level[y*row+x] == '#':
             if x != 19 and y != stage*mapSize+19:
@@ -446,22 +601,31 @@ proc updateDrawFrame {.cdecl.} =
               let right = not (level[y*row+x+1] == '#' or level[y*row+x+1] == '/')
               drawCubeTextureRec(level_tex, Rectangle(x:0,y:0,width:16,height:16),Vector3(x:x.float*wallSize,y:wallSize/2.0,z:y.float*wallSize),wallSize,wallSize,wallSize,(front,false,false,false,right,false),White)
           elif level[y*row+x] == 'E':
-            #drawCubeTextureRec(level_tex, Rectangle(x:0,y:0,width:16,height:16),Vector3(x:x.float*wallSize,y: -8.0,z:y.float*wallSize),wallSize,wallSize,wallSize,(true,true,false,false,true,true),Brown)
-            drawCubeWires(Vector3(x:x.float*wallSize,y: 4.0,z:y.float*wallSize),Vector3(x:wallSize,y:wallSize,z:wallSize),Brown)
             drawCubeTextureRec(level_tex, Rectangle(x:0,y:16,width:16,height:16),Vector3(x:x.float*wallSize,y: -8.0,z:y.float*wallSize),wallSize,wallSize,wallSize,(false,false,true,false,false,false),Brown)
-          else:
+            drawCubeTextureRec(level_tex, Rectangle(x:96,y:0,width:32,height:32),Vector3(x:x.float*wallSize,y: wallSize/2.0,z:y.float*wallSize),wallSize,wallSize,wallSize,(true,true,false,false,true,true),White)
+          else: 
             drawCubeTextureRec(level_tex, Rectangle(x:0,y:0,width:16,height:16),Vector3(x:x.float*wallSize,y: -8.0,z:y.float*wallSize),wallSize,wallSize,wallSize,(false,false,true,false,false,false),LightGray)
+        elif not ((level[y*row+x+row] == '#' or level[y*row+x+row] == '/') and (level[y*row+x-row] == '#' or level[y*row+x-row] == '/') and (level[y*row+x+1] == '#' or level[y*row+x+1] == '/') and (level[y*row+x-1] == '#' or level[y*row+x-1] == '/')):
+          drawCubeTextureRec(level_tex, Rectangle(x:0,y:0,width:16,height:16),Vector3(x:x.float*wallSize,y: -8.0,z:y.float*wallSize),wallSize,wallSize,wallSize,(false,false,true,false,false,false),Color(r:255,g:255,b:255,a:4))
     endMode3D()
+
+    # color filter
+
+    #drawRectangle(0,0,screenWidth,screenHeight,Color(r:255,g:64,b:0,a:16))
+
+    # UI
+
+    drawRectangle(Vector2(),Vector2(x:240.0,y:40.0),Gray)
+    drawRectangle(Vector2(),Vector2(x:240.0*(players[0].hp/playerMaxHp),y:40.0),Green)
+    drawText("HP",10,10,20,Black)
+    drawRectangle(Vector2(y:40),Vector2(x:200.0,y:10.0),Gray)
+    let cooldown = players[0].charge_cooldown
+    drawRectangle(Vector2(y:40),Vector2(x:200.0*(300-cooldown).float/300.0,y:10.0),SkyBlue)
+    if carrotsHeld > 0: drawText(("Carrots: " & $carrotsHeld).cstring,260,10,20,Orange)
   # pause screen
   if currentScreen == pause:
     drawRectangle(0,0,screenWidth,screenHeight,Color(r:0,g:0,b:0,a:96))
     drawText("PAUSED.\nPress Backspace to return to the title screen.\nPress Enter to get back into gameplay.\nPress R to restart.",10,10,20,White)
-    # 2d minimap for debugging purposes. Might leave it in the game because it's aesthetically pleasing
-    for y in stage*mapSize..stage*mapSize+19:
-      for x in 0..19:
-        if level[y*22+x] == '#':
-          drawRectangle(Vector2(x:x.float*wallSize-mapSize.float*wallSize+screenWidth,y:y.float*wallSize-mapSize.float*wallSize+screenHeight),Vector2(x:wallSize,y:wallSize),White)
-    drawRectangle(Vector2(y:floor((players[0].pos.z+wallSize/2.0)/wallSize)*wallSize-mapSize.float*wallSize+screenHeight,x:floor((players[0].pos.x.float+wallSize/2.0)/wallSize)*wallSize-mapSize.float*wallSize+screenWidth),Vector2(x:wallSize,y:wallSize),Green)
   drawRectangle(0,0,screenWidth,screenHeight,Color(r:0,g:0,b:0,a:fadeAlpha.uint8)) # transition rectangle
   endDrawing()
   # --------------------------------------------------------------------------------------
