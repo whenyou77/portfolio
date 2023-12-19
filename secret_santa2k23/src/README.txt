@@ -6,3 +6,4 @@ P/Z/left click - normal attack
 O/X/right click - dash attack
 
 E/F - eat carrot
+Enter to pause

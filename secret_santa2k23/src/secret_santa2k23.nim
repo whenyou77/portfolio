@@ -261,8 +261,9 @@ proc bresenhamLine(x1, y1, x2, y2: int): seq[tuple[x, y: int]] =
 proc lineOfSight(player, enemy: (int,int), grid: string, e: Enemy): bool =
   let points = bresenhamLine(player[0], player[1], enemy[0], enemy[1])
   for point in points:
-    if grid[point.y*21+point.x] == '#':
-      echo "colliding with " & $e
+    echo point.y*22+point.x
+    if grid[point.y*22+point.x] == '#':
+      echo "colliding with " & $point
       return false
   return true
 
@@ -493,7 +494,7 @@ proc updateDrawFrame {.cdecl.} =
         echo floor(p.pos.z/wallSize).int
         echo floor(e.pos.x/wallSize).int
         echo floor(e.pos.z/wallSize).int
-        if lineOfSight((floor(p.pos.x/wallSize).int,floor(p.pos.z/wallSize).int),(floor(e.pos.x/wallSize).int,floor(e.pos.z/wallSize).int),level,e):
+        if lineOfSight((floor(e.pos.x/wallSize).int,floor(e.pos.z/wallSize).int),(floor(p.pos.x/wallSize).int,floor(p.pos.z/wallSize).int),level,e):
           let angleToPlayer = arctan2(p.pos.z-e.pos.z,p.pos.x-e.pos.x)
           e.vel.x = velMod*angleToPlayer.cos()
           e.vel.z = velMod*angleToPlayer.sin()
