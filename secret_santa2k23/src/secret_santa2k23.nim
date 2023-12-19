@@ -49,6 +49,7 @@ type
     hp: float
     grounded: bool
     att_cooldown: int
+    falling: bool
   Solid = object of Thing
   Enemy = object of Actor
     enemyType: EnemyType
@@ -432,13 +433,17 @@ proc updateDrawFrame {.cdecl.} =
               of banana: p.bananized = true
               of dubloon: p.dubloons_held += 1
               break
-          if p.pos.y < p.size.y/2.0: 
-            p.pos.y = p.size.y/2.0
-            p.vel.y = 0.0
-            p.grounded = true
-          if p.pos.y > wallSize-p.size.y/2.0:
-            p.pos.y = wallSize-p.size.y/2.0
-            p.vel.y = 0.0
+          if level[(floor((p.pos.z-p.size.z/2.0+wallSize/2.0)/wallSize)*rowFloat+floor((p.pos.x.float-p.size.x/2.0+wallSize/2.0)/wallSize)).int] == 'S' and level[(floor((p.pos.z.float-p.size.z/2.0+wallSize/2.0)/wallSize)*rowFloat+floor((p.pos.x.float+p.size.x/2.0+wallSize/2.0)/wallSize)).int] == 'S' and level[(floor((p.pos.z+p.size.z/2.0+wallSize/2.0)/wallSize)*rowFloat+floor((p.pos.x.float-p.size.x/2.0+wallSize/2.0)/wallSize)).int] == 'S' and level[(floor((p.pos.z.float+p.size.z/2.0+wallSize/2.0)/wallSize)*rowFloat+floor((p.pos.x.float+p.size.x/2.0+wallSize/2.0)/wallSize)).int] == 'S' and p.pos.y-p.size.y/2.0<0.0:
+            p.falling = true
+          if not p.falling:
+            if p.pos.y < p.size.y/2.0: 
+              p.pos.y = p.size.y/2.0
+              p.vel.y = 0.0
+              p.grounded = true
+            if p.pos.y > wallSize-p.size.y/2.0:
+              p.pos.y = wallSize-p.size.y/2.0
+              p.vel.y = 0.0
+          if p.pos.y < -wallSize*3.0: p.hp = 0.0
           p.hp = p.hp.clamp(0.0,playerMaxHp)
         if elevatorPlayers==1:
           advance = true
@@ -470,6 +475,7 @@ proc updateDrawFrame {.cdecl.} =
         for n,p in players.pairs:
           if distance(e.pos,p.pos) < distance(e.pos,players[closest].pos) and p.alive:
             closest = n
+        closest = 0
         let p = players[closest]
         if distance(e.pos,p.pos) < hypot(e.size.x/2.0,e.size.z/2.0)+hypot(p.size.x/2.0,p.size.z/2.0)+max(e.size.x,e.size.z)/2.0 and e.att_cooldown == 0:
           if players[closest].charge_vel == Vector2():
@@ -546,13 +552,13 @@ proc updateDrawFrame {.cdecl.} =
             else:
               e.pos.y = w.pos.y-w.size.y/2.0-e.size.y/2.0
               e.vel.y = 0.0
-        if e.pos.y < e.size.y/2.0: 
+        if level[(floor((e.pos.z-e.size.z/2.0+wallSize/2.0)/wallSize)*rowFloat+floor((e.pos.x.float-e.size.x/2.0+wallSize/2.0)/wallSize)).int] == 'S' and level[(floor((e.pos.z.float-e.size.z/2.0+wallSize/2.0)/wallSize)*rowFloat+floor((e.pos.x.float+e.size.x/2.0+wallSize/2.0)/wallSize)).int] == 'S' and level[(floor((e.pos.z+e.size.z/2.0+wallSize/2.0)/wallSize)*rowFloat+floor((e.pos.x.float-e.size.x/2.0+wallSize/2.0)/wallSize)).int] == 'S' and level[(floor((e.pos.z.float+e.size.z/2.0+wallSize/2.0)/wallSize)*rowFloat+floor((e.pos.x.float+e.size.x/2.0+wallSize/2.0)/wallSize)).int] == 'S' and e.pos.y-p.size.y/2.0<0.0:
+          e.falling = true
+        if e.pos.y < e.size.y/2.0 and not e.falling: 
           e.pos.y = e.size.y/2.0
           e.vel.y = 0.0
           e.grounded = true
-        if e.pos.y > wallSize-e.size.y/2.0:
-          e.pos.y = wallSize-e.size.y/2.0
-          e.vel.y = 0.0
+        if e.pos.y < -wallSize*3.0: e.hp = 0.0
         if e.hp <= 0.0: deletion_queue.add(i)
 
       for d in deletion_queue:
@@ -653,7 +659,7 @@ proc updateDrawFrame {.cdecl.} =
         drawCube(p.pos,p.size,Green)
         let groundpos = 0.0 # shadow's y (ground height)
         let radius = sqrt(p.size.x/2.0*p.size.x/2.0+p.size.z/2.0*p.size.z/2.0)+0.5
-        drawCylinder(Vector3(x:p.pos.x,y:0.001,z:p.pos.z),radius-(p.pos.y-groundpos)/10.0,radius-(p.pos.y-groundpos)/10.0,0.0,20,Black)
+        if not p.falling: drawCylinder(Vector3(x:p.pos.x,y:0.001,z:p.pos.z),radius-(p.pos.y-groundpos)/10.0,radius-(p.pos.y-groundpos)/10.0,0.0,20,Black)
         let radius2 = sqrt(2.0)+6.0
         if p.att_cooldown > 0: drawCylinder(Vector3(x:p.pos.x,y:0.001,z:p.pos.z),radius2,radius2,2.0,20,Color(r:255,a:floor(160*(p.att_cooldown/50)).uint8))
     for w in walls:
@@ -677,7 +683,7 @@ proc updateDrawFrame {.cdecl.} =
         of possum: drawCube(e.pos,e.size,Gray)
         let groundpos = 0.0 # shadow's y (ground height)
         let radius = sqrt(e.size.x/2.0*e.size.x/2.0+e.size.z/2.0*e.size.z/2.0)+0.5
-        drawCylinder(Vector3(x:e.pos.x,y:0.1,z:e.pos.z),radius-(e.pos.y-groundpos)/10.0,radius-(e.pos.y-groundpos)/10.0,0.0,20,Black)
+        if not e.falling: drawCylinder(Vector3(x:e.pos.x,y:0.1,z:e.pos.z),radius-(e.pos.y-groundpos)/10.0,radius-(e.pos.y-groundpos)/10.0,0.0,20,Black)
     for y in stage*mapSize..stage*mapSize+mapSize-1:
       for x in 0..mapSize-1:
         if not (level[y*row+x] == '/'):
