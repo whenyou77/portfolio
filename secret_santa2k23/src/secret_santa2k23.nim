@@ -30,11 +30,6 @@ type
     pause
     gameOver
     thxForPlaying
-  Direction = enum
-    up = 0
-    right = 1
-    down = 2
-    left = 3
   CollectibleType = enum
     carrot # C
     banana # B
@@ -54,6 +49,7 @@ type
     hp: float
     grounded: bool
     att_cooldown: int
+    falling: bool
   Solid = object of Thing
   Enemy = object of Actor
     enemyType: EnemyType
@@ -62,6 +58,7 @@ type
     charge_cooldown: int
     bananized: bool
     dubloons_held: int
+    alive: bool
   Wall = object of Solid # #
 const
   screenWidth = 960
@@ -85,6 +82,9 @@ var row = mapSize+2 # how many characters till next row in the map? (\n also cou
 var carrotsHeld = 0 # carrots are shared
 var startingCarrots = 0 # how many carrots were held when the stage ended?
 var advance = false # switch to next stage?
+var playersInGame = 1 # how many players in-game?
+var joinedPlayers = (false,false,false,false)
+var damagedAlready: seq[int]
 
 var players: array[4,Player]
 var walls: seq[Wall] = @[]
@@ -229,6 +229,43 @@ proc drawCubeTextureRec(texture: Texture2D, source: Rectangle, position: Vector3
 
     setTexture(0)
 
+proc bresenhamLine(x1, y1, x2, y2: int): seq[tuple[x, y: int]] =
+  var points: seq[tuple[x, y: int]] = @[]
+  let dx = abs(x2 - x1)
+  let dy = abs(y2 - y1)
+  var x = x1
+  var y = y1
+  let sx = if x1 > x2: -1 else: 1
+  let sy = if y1 > y2: -1 else: 1
+  if dx > dy:
+    var err = dx div 2
+    while x != x2:
+      points.add((x: x, y: y))
+      err -= dy
+      if err < 0:
+        y += sy
+        err += dx
+      x += sx
+  else:
+    var err = dy div 2
+    while y != y2:
+      points.add((x: x, y: y))
+      err -= dx
+      if err < 0:
+        x += sx
+        err += dy
+      y += sy
+  points.add((x: x, y: y))
+  return points
+
+proc lineOfSight(player, enemy: (int,int), grid: string, e: Enemy): bool =
+  let points = bresenhamLine(player[0], player[1], enemy[0], enemy[1])
+  for point in points:
+    if grid[point.y*21+point.x] == '#':
+      echo "colliding with " & $e
+      return false
+  return true
+
 # ----------------------------------------------------------------------------------------
 # Module functions Definition
 # ----------------------------------------------------------------------------------------
@@ -256,7 +293,7 @@ proc updateDrawFrame {.cdecl.} =
           if p.att_cooldown > 0: 
             p.att_cooldown -= 1
           if p.vel.y > -2.0: p.vel.y -= 0.04
-          if i == 0:
+          if i == 0 and p.alive:
             if p.charge_vel.x == 0.0 and p.charge_vel.y == 0.0:
               if isKeyDown(D) or isKeyDown(Right):
                 if p.vel.x < 0.5*velMod: p.vel.x += 0.075*velMod
@@ -284,18 +321,20 @@ proc updateDrawFrame {.cdecl.} =
                   p.vel.z += 0.05*velMod
                   if p.vel.z > 0.0:
                     p.vel.z = 0.0
-            if isKeyPressed(Space) and p.grounded: p.vel.y = 1.0
+            if (isKeyPressed(Space) or isKeyPressed(C)) and p.grounded: p.vel.y = 1.0
             if (isMouseButtonPressed(MouseButton.Right) or isKeyPressed(X) or isKeyPressed(O)) and p.charge_cooldown == 0 and (p.vel.x != 0.0 or p.vel.z != 0.0): 
               p.charge_cooldown = 300
               p.vel.y = 0.0
               p.charge_vel = Vector2(x:1.0*p.vel.x.sgn().float,y:1.0*p.vel.z.sgn().float)
-            if (isMouseButtonPressed(MouseButton.Left) or isKeyPressed(C) or isKeyPressed(P)) and p.att_cooldown == 0: 
+              damagedAlready = @[]
+            if (isMouseButtonPressed(MouseButton.Left) or isKeyPressed(Z) or isKeyPressed(P)) and p.att_cooldown == 0 and p.charge_vel == Vector2(): 
               p.att_cooldown = 50
-              let radius = sqrt(2.0)+1.0
+              let radius = sqrt(2.0)+6.0
               for e in enemies.mitems:
-                if checkCollisionCircleRec(Vector2(x:p.pos.x,y:p.pos.z),radius.float32,Rectangle(x:e.pos.x,y:e.pos.z,width:e.size.x,height:e.size.z)):
+                if checkCollisionCircleRec(Vector2(x:p.pos.x,y:p.pos.z),radius.float32,Rectangle(x:e.pos.x,y:e.pos.z,width:e.size.x,height:e.size.z)) and e.pos.y + e.size.y/2.0 > p.pos.y-p.size.y/2.0 and e.pos.y - e.size.y/2.0 < p.pos.y + p.size.y/2.0:
                   e.hp -= 10.0
-            if isKeyPressed(KeyboardKey.E) and carrotsHeld > 0 and p.hp < playerMaxHp:
+                  e.vel = Vector3()
+            if (isKeyPressed(KeyboardKey.E) or isKeyPressed(F)) and carrotsHeld > 0 and p.hp < playerMaxHp:
               carrotsHeld -= 1
               p.hp += 10.0
           p.grounded = false
@@ -337,24 +376,41 @@ proc updateDrawFrame {.cdecl.} =
               else:
                 p.pos.z = w.pos.z-w.size.z/2.0-p.size.z/2.0
               p.vel.z = 0.0
+
           # charge_vel x friction
           if p.charge_vel.x > 0.0: 
+            for n,e in enemies.mpairs:
+              if aabbcc(p.pos.x,p.pos.z,p.pos.y,p.size.x,p.size.z,p.size.y,e.pos.x,e.pos.z,e.pos.y,e.size.x,e.size.z,e.size.y) and not damagedAlready.contains(n):
+                e.hp -= 15.0
+                damagedAlready.add(n)
             p.vel.y = 0.0
             p.charge_vel.x -= 0.05
             if p.charge_vel.x < 0.0:
               p.charge_vel.x = 0.0
           elif p.charge_vel.x < 0.0: 
+            for n,e in enemies.mpairs:
+              if aabbcc(p.pos.x,p.pos.z,p.pos.y,p.size.x,p.size.z,p.size.y,e.pos.x,e.pos.z,e.pos.y,e.size.x,e.size.z,e.size.y) and not damagedAlready.contains(n):
+                e.hp -= 15.0
+                damagedAlready.add(n)
             p.vel.y = 0.0
             p.charge_vel.x += 0.05
             if p.charge_vel.x > 0.0:
               p.charge_vel.x = 0.0
           # charge_vel z friction (y, beacuse it's a vector2)
           if p.charge_vel.y > 0.0: 
+            for n,e in enemies.mpairs:
+              if aabbcc(p.pos.x,p.pos.z,p.pos.y,p.size.x,p.size.z,p.size.y,e.pos.x,e.pos.z,e.pos.y,e.size.x,e.size.z,e.size.y) and not damagedAlready.contains(n):
+                e.hp -= 15.0
+                damagedAlready.add(n)
             p.vel.y = 0.0
             p.charge_vel.y -= 0.05
             if p.charge_vel.y < 0.0:
               p.charge_vel.y = 0.0
           elif p.charge_vel.y < 0.0: 
+            for n,e in enemies.mpairs:
+              if aabbcc(p.pos.x,p.pos.z,p.pos.y,p.size.x,p.size.z,p.size.y,e.pos.x,e.pos.z,e.pos.y,e.size.x,e.size.z,e.size.y) and not damagedAlready.contains(n):
+                e.hp -= 15.0
+                damagedAlready.add(n)
             p.vel.y = 0.0
             p.charge_vel.y += 0.05
             if p.charge_vel.y > 0.0:
@@ -377,13 +433,17 @@ proc updateDrawFrame {.cdecl.} =
               of banana: p.bananized = true
               of dubloon: p.dubloons_held += 1
               break
-          if p.pos.y < p.size.y/2.0: 
-            p.pos.y = p.size.y/2.0
-            p.vel.y = 0.0
-            p.grounded = true
-          if p.pos.y > wallSize-p.size.y/2.0:
-            p.pos.y = wallSize-p.size.y/2.0
-            p.vel.y = 0.0
+          if level[(floor((p.pos.z-p.size.z/2.0+wallSize/2.0)/wallSize)*rowFloat+floor((p.pos.x.float-p.size.x/2.0+wallSize/2.0)/wallSize)).int] == 'S' and level[(floor((p.pos.z.float-p.size.z/2.0+wallSize/2.0)/wallSize)*rowFloat+floor((p.pos.x.float+p.size.x/2.0+wallSize/2.0)/wallSize)).int] == 'S' and level[(floor((p.pos.z+p.size.z/2.0+wallSize/2.0)/wallSize)*rowFloat+floor((p.pos.x.float-p.size.x/2.0+wallSize/2.0)/wallSize)).int] == 'S' and level[(floor((p.pos.z.float+p.size.z/2.0+wallSize/2.0)/wallSize)*rowFloat+floor((p.pos.x.float+p.size.x/2.0+wallSize/2.0)/wallSize)).int] == 'S' and p.pos.y-p.size.y/2.0<0.0:
+            p.falling = true
+          if not p.falling:
+            if p.pos.y < p.size.y/2.0: 
+              p.pos.y = p.size.y/2.0
+              p.vel.y = 0.0
+              p.grounded = true
+            if p.pos.y > wallSize-p.size.y/2.0:
+              p.pos.y = wallSize-p.size.y/2.0
+              p.vel.y = 0.0
+          if p.pos.y < -wallSize*3.0: p.hp = 0.0
           p.hp = p.hp.clamp(0.0,playerMaxHp)
         if elevatorPlayers==1:
           advance = true
@@ -392,6 +452,8 @@ proc updateDrawFrame {.cdecl.} =
           else:
             startingCarrots = carrotsHeld
             transition(gameplay,30,30)
+        if players[0].hp <= 0.0:
+          transition(gameOver,60,30)
           
         if isKeyPressed(Enter): currentScreen = pause
         if isKeyPressed(R): transition(gameplay,30,30)
@@ -402,15 +464,42 @@ proc updateDrawFrame {.cdecl.} =
       var deleted = 0
 
       for i,e in enemies.mpairs:
+        if e.att_cooldown > 0: e.att_cooldown -= 1
         if e.vel.y > -2.0: e.vel.y -= 0.04
-        let angleToPlayer = arctan2(players[0].pos.z-e.pos.z,players[0].pos.x-e.pos.x)
         var velMod = 0.4
         case e.enemyType:
         of possum: velMod = 0.6
         of jeopard: velMod = 0.5
         of crow: velMod = 0.4 
-        e.vel.x = velMod*angleToPlayer.cos()
-        e.vel.z = velMod*angleToPlayer.sin()
+        var closest = 0
+        for n,p in players.pairs:
+          if distance(e.pos,p.pos) < distance(e.pos,players[closest].pos) and p.alive:
+            closest = n
+        closest = 0
+        let p = players[closest]
+        if distance(e.pos,p.pos) < hypot(e.size.x/2.0,e.size.z/2.0)+hypot(p.size.x/2.0,p.size.z/2.0)+max(e.size.x,e.size.z)/2.0 and e.att_cooldown == 0:
+          if players[closest].charge_vel == Vector2():
+            case e.enemyType:
+            of possum: 
+              players[closest].hp -= 20.0
+              e.att_cooldown = 60
+            of jeopard: 
+              players[closest].hp -= 40.0
+              e.att_cooldown = 120
+            of crow: 
+              players[closest].hp -= 30.0
+              e.att_cooldown = 60
+        echo floor(p.pos.x/wallSize).int
+        echo floor(p.pos.z/wallSize).int
+        echo floor(e.pos.x/wallSize).int
+        echo floor(e.pos.z/wallSize).int
+        if lineOfSight((floor(p.pos.x/wallSize).int,floor(p.pos.z/wallSize).int),(floor(e.pos.x/wallSize).int,floor(e.pos.z/wallSize).int),level,e):
+          let angleToPlayer = arctan2(p.pos.z-e.pos.z,p.pos.x-e.pos.x)
+          e.vel.x = velMod*angleToPlayer.cos()
+          e.vel.z = velMod*angleToPlayer.sin()
+        if e.att_cooldown > 0:
+          e.vel.x = 0.0
+          e.vel.z = 0.0
         e.pos.x += e.vel.x
         let rowFloat = row.float
         if level[(floor((e.pos.z-e.size.z/2.0+wallSize/2.0)/wallSize)*rowFloat+floor((e.pos.x.float-e.size.x/2.0+wallSize/2.0)/wallSize)).int] == '#' or level[(floor((e.pos.z.float+e.size.z/2.0+wallSize/2.0)/wallSize)*rowFloat+floor((e.pos.x.float-e.size.x/2.0+wallSize/2.0)/wallSize)).int] == '#':
@@ -463,13 +552,13 @@ proc updateDrawFrame {.cdecl.} =
             else:
               e.pos.y = w.pos.y-w.size.y/2.0-e.size.y/2.0
               e.vel.y = 0.0
-        if e.pos.y < e.size.y/2.0: 
+        if level[(floor((e.pos.z-e.size.z/2.0+wallSize/2.0)/wallSize)*rowFloat+floor((e.pos.x.float-e.size.x/2.0+wallSize/2.0)/wallSize)).int] == 'S' and level[(floor((e.pos.z.float-e.size.z/2.0+wallSize/2.0)/wallSize)*rowFloat+floor((e.pos.x.float+e.size.x/2.0+wallSize/2.0)/wallSize)).int] == 'S' and level[(floor((e.pos.z+e.size.z/2.0+wallSize/2.0)/wallSize)*rowFloat+floor((e.pos.x.float-e.size.x/2.0+wallSize/2.0)/wallSize)).int] == 'S' and level[(floor((e.pos.z.float+e.size.z/2.0+wallSize/2.0)/wallSize)*rowFloat+floor((e.pos.x.float+e.size.x/2.0+wallSize/2.0)/wallSize)).int] == 'S' and e.pos.y-p.size.y/2.0<0.0:
+          e.falling = true
+        if e.pos.y < e.size.y/2.0 and not e.falling: 
           e.pos.y = e.size.y/2.0
           e.vel.y = 0.0
           e.grounded = true
-        if e.pos.y > wallSize-e.size.y/2.0:
-          e.pos.y = wallSize-e.size.y/2.0
-          e.vel.y = 0.0
+        if e.pos.y < -wallSize*3.0: e.hp = 0.0
         if e.hp <= 0.0: deletion_queue.add(i)
 
       for d in deletion_queue:
@@ -524,10 +613,10 @@ proc updateDrawFrame {.cdecl.} =
             for x in 0..mapSize-1:
               let cell = level[y*(mapSize+2)+x].toUpperAscii()
               if cell == 'P':
-                players[0] = Player(pos:Vector3(x: x.float*wallSize-2.0,y:1.5,z: y.float*wallSize-2.0),size:Vector3(x:2.0,y:3.0,z:2.0),vel:Vector3(),hp:playerMaxHp,att_cooldown:0)
-                players[1] = Player(pos:Vector3(x: x.float*wallSize+2.0,y:1.5,z: y.float*wallSize-2.0),size:Vector3(x:2.0,y:3.0,z:2.0),vel:Vector3(),hp:playerMaxHp,att_cooldown:0)
-                players[2] = Player(pos:Vector3(x: x.float*wallSize-2.0,y:1.5,z: y.float*wallSize+2.0),size:Vector3(x:2.0,y:3.0,z:2.0),vel:Vector3(),hp:playerMaxHp,att_cooldown:0)
-                players[3] = Player(pos:Vector3(x: x.float*wallSize+2.0,y:1.5,z: y.float*wallSize+2.0),size:Vector3(x:2.0,y:3.0,z:2.0),vel:Vector3(),hp:playerMaxHp,att_cooldown:0)
+                players[0] = Player(pos:Vector3(x: x.float*wallSize-2.0,y:1.5,z: y.float*wallSize-2.0),size:Vector3(x:2.0,y:3.0,z:2.0),vel:Vector3(),hp:playerMaxHp,att_cooldown:0,alive:true)
+                players[1] = Player(pos:Vector3(x: x.float*wallSize+2.0,y:1.5,z: y.float*wallSize-2.0),size:Vector3(x:2.0,y:3.0,z:2.0),vel:Vector3(),hp:playerMaxHp,att_cooldown:0,alive:false)
+                players[2] = Player(pos:Vector3(x: x.float*wallSize-2.0,y:1.5,z: y.float*wallSize+2.0),size:Vector3(x:2.0,y:3.0,z:2.0),vel:Vector3(),hp:playerMaxHp,att_cooldown:0,alive:false)
+                players[3] = Player(pos:Vector3(x: x.float*wallSize+2.0,y:1.5,z: y.float*wallSize+2.0),size:Vector3(x:2.0,y:3.0,z:2.0),vel:Vector3(),hp:playerMaxHp,att_cooldown:0,alive:false)
                 break
               elif level[y*(mapSize+2)+x] == 'w':
                 walls.add(Wall(pos:Vector3(x: x.float*wallSize,y:wallSize/4.0,z: y.float*wallSize),size:Vector3(x:wallSize,y:wallSize/2.0,z:2.0)))
@@ -566,10 +655,13 @@ proc updateDrawFrame {.cdecl.} =
 
     beginMode3D(camera)
     for i,p in players.pairs:
-      drawCube(p.pos,p.size,Green)
-      let groundpos = 0.0 # shadow's y (ground height)
-      let radius = sqrt(p.size.x/2.0*p.size.x/2.0+p.size.z/2.0*p.size.z/2.0)+0.5
-      drawCylinder(Vector3(x:p.pos.x,y:0.1,z:p.pos.z),radius-(p.pos.y-groundpos)/10.0,radius-(p.pos.y-groundpos)/10.0,0.0,20,Black)
+      if p.alive:
+        drawCube(p.pos,p.size,Green)
+        let groundpos = 0.0 # shadow's y (ground height)
+        let radius = sqrt(p.size.x/2.0*p.size.x/2.0+p.size.z/2.0*p.size.z/2.0)+0.5
+        if not p.falling: drawCylinder(Vector3(x:p.pos.x,y:0.001,z:p.pos.z),radius-(p.pos.y-groundpos)/10.0,radius-(p.pos.y-groundpos)/10.0,0.0,20,Black)
+        let radius2 = sqrt(2.0)+6.0
+        if p.att_cooldown > 0: drawCylinder(Vector3(x:p.pos.x,y:0.001,z:p.pos.z),radius2,radius2,2.0,20,Color(r:255,a:floor(160*(p.att_cooldown/50)).uint8))
     for w in walls:
       drawCubeTextureRec(level_tex, Rectangle(x:0,y:8,width:16,height:8),w.pos,w.size.x,w.size.y,w.size.z,(true,true,true,true,true,true),White)
     for c in collectibles:
@@ -591,7 +683,7 @@ proc updateDrawFrame {.cdecl.} =
         of possum: drawCube(e.pos,e.size,Gray)
         let groundpos = 0.0 # shadow's y (ground height)
         let radius = sqrt(e.size.x/2.0*e.size.x/2.0+e.size.z/2.0*e.size.z/2.0)+0.5
-        drawCylinder(Vector3(x:e.pos.x,y:0.1,z:e.pos.z),radius-(e.pos.y-groundpos)/10.0,radius-(e.pos.y-groundpos)/10.0,0.0,20,Black)
+        if not e.falling: drawCylinder(Vector3(x:e.pos.x,y:0.1,z:e.pos.z),radius-(e.pos.y-groundpos)/10.0,radius-(e.pos.y-groundpos)/10.0,0.0,20,Black)
     for y in stage*mapSize..stage*mapSize+mapSize-1:
       for x in 0..mapSize-1:
         if not (level[y*row+x] == '/'):
@@ -603,7 +695,7 @@ proc updateDrawFrame {.cdecl.} =
           elif level[y*row+x] == 'E':
             drawCubeTextureRec(level_tex, Rectangle(x:0,y:16,width:16,height:16),Vector3(x:x.float*wallSize,y: -8.0,z:y.float*wallSize),wallSize,wallSize,wallSize,(false,false,true,false,false,false),Brown)
             drawCubeTextureRec(level_tex, Rectangle(x:96,y:0,width:32,height:32),Vector3(x:x.float*wallSize,y: wallSize/2.0,z:y.float*wallSize),wallSize,wallSize,wallSize,(true,true,false,false,true,true),White)
-          else: 
+          elif level[y*row+x] != 'S': 
             drawCubeTextureRec(level_tex, Rectangle(x:0,y:0,width:16,height:16),Vector3(x:x.float*wallSize,y: -8.0,z:y.float*wallSize),wallSize,wallSize,wallSize,(false,false,true,false,false,false),LightGray)
         elif not ((level[y*row+x+row] == '#' or level[y*row+x+row] == '/') and (level[y*row+x-row] == '#' or level[y*row+x-row] == '/') and (level[y*row+x+1] == '#' or level[y*row+x+1] == '/') and (level[y*row+x-1] == '#' or level[y*row+x-1] == '/')):
           drawCubeTextureRec(level_tex, Rectangle(x:0,y:0,width:16,height:16),Vector3(x:x.float*wallSize,y: -8.0,z:y.float*wallSize),wallSize,wallSize,wallSize,(false,false,true,false,false,false),Color(r:255,g:255,b:255,a:4))
