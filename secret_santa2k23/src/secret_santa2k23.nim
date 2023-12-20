@@ -33,7 +33,7 @@ type
   CollectibleType = enum
     carrot # C
     banana # B
-    dubloon # D
+    dubloon # M
   EnemyType = enum
     possum # O
     crow # K
@@ -53,6 +53,7 @@ type
   Solid = object of Thing
   Enemy = object of Actor
     enemyType: EnemyType
+    max_hp: float
   Player = object of Actor # P
     charge_vel: Vector2 # when you attack, you charge. This is the velocity exerted on the player
     charge_cooldown: int
@@ -337,7 +338,7 @@ proc updateDrawFrame {.cdecl.} =
                   e.vel = Vector3()
             if (isKeyPressed(KeyboardKey.E) or isKeyPressed(F)) and carrotsHeld > 0 and p.hp < playerMaxHp:
               carrotsHeld -= 1
-              p.hp += 10.0
+              p.hp += 15.0
           p.grounded = false
           p.pos.x += p.vel.x+p.charge_vel.x
           let rowFloat = row.float
@@ -466,7 +467,7 @@ proc updateDrawFrame {.cdecl.} =
 
       for i,e in enemies.mpairs:
         if e.att_cooldown > 0: e.att_cooldown -= 1
-        if e.vel.y > -2.0: e.vel.y -= 0.04
+        if e.vel.y > -2.0 and e.enemyType != crow: e.vel.y -= 0.04
         var velMod = 0.4
         case e.enemyType:
         of possum: velMod = 0.6
@@ -483,12 +484,12 @@ proc updateDrawFrame {.cdecl.} =
             case e.enemyType:
             of possum: 
               players[closest].hp -= 20.0
-              e.att_cooldown = 60
+              e.att_cooldown = 90
             of jeopard: 
               players[closest].hp -= 40.0
-              e.att_cooldown = 120
+              e.att_cooldown = 150
             of crow: 
-              players[closest].hp -= 30.0
+              players[closest].hp -= 15.0
               e.att_cooldown = 60
         echo floor(p.pos.x/wallSize).int
         echo floor(p.pos.z/wallSize).int
@@ -625,14 +626,17 @@ proc updateDrawFrame {.cdecl.} =
                 collectibles.add(Collectible(pos:Vector3(x: x.float*wallSize,y:2.0,z: y.float*wallSize),size:Vector3(x:2.0,y:2.0,z:2.0),collectible_type:carrot))
               elif cell == 'B':
                 collectibles.add(Collectible(pos:Vector3(x: x.float*wallSize,y:2.0,z: y.float*wallSize),size:Vector3(x:2.0,y:2.0,z:2.0),collectible_type:banana))
-              elif cell == 'D':
+              elif cell == 'M':
                 collectibles.add(Collectible(pos:Vector3(x: x.float*wallSize,y:2.0,z: y.float*wallSize),size:Vector3(x:1.0,y:2.0,z:2.0),collectible_type:dubloon))
               elif cell == 'J':
-                enemies.add(Enemy(pos:Vector3(x: x.float*wallSize,y:2.5,z: y.float*wallSize),size:Vector3(x:7.0,y:5.0,z:5.0),enemyType:jeopard,hp:50.0))
+                enemies.add(Enemy(pos:Vector3(x: x.float*wallSize,y:2.5,z: y.float*wallSize),size:Vector3(x:7.0,y:5.0,z:5.0),enemyType:jeopard,hp:40.0,max_hp:40.0))
               elif cell == 'K':
-                enemies.add(Enemy(pos:Vector3(x: x.float*wallSize,y:0.75,z: y.float*wallSize),size:Vector3(x:1.5,y:1.5,z:1.5),enemyType:crow,hp:10.0))
+                enemies.add(Enemy(pos:Vector3(x: x.float*wallSize,y:wallSize-0.75,z: y.float*wallSize),size:Vector3(x:1.5,y:1.5,z:1.5),enemyType:crow,hp:10.0,max_hp:10.0))
+                enemies.add(Enemy(pos:Vector3(x: x.float*wallSize,y:wallSize-0.75,z: y.float*wallSize),size:Vector3(x:1.5,y:1.5,z:1.5),enemyType:crow,hp:10.0,max_hp:10.0))
               elif cell == 'O':
-                enemies.add(Enemy(pos:Vector3(x: x.float*wallSize,y:0.75,z: y.float*wallSize),size:Vector3(x:3.0,y:1.5,z:1.5),enemyType:possum,hp:20.0))
+                enemies.add(Enemy(pos:Vector3(x: x.float*wallSize,y:0.75,z: y.float*wallSize),size:Vector3(x:3.0,y:1.5,z:1.5),enemyType:possum,hp:20.0,max_hp:20.0))
+                enemies.add(Enemy(pos:Vector3(x: x.float*wallSize,y:0.75,z: y.float*wallSize),size:Vector3(x:3.0,y:1.5,z:1.5),enemyType:possum,hp:20.0,max_hp:20.0))
+                enemies.add(Enemy(pos:Vector3(x: x.float*wallSize,y:0.75,z: y.float*wallSize),size:Vector3(x:3.0,y:1.5,z:1.5),enemyType:possum,hp:20.0,max_hp:20.0))
               if cell != 'W' and level[y*(mapSize+2)+x].isLowerAscii():
                 level[y*(mapSize+2)+x] = '/'
         of title:
@@ -662,7 +666,7 @@ proc updateDrawFrame {.cdecl.} =
         let radius = sqrt(p.size.x/2.0*p.size.x/2.0+p.size.z/2.0*p.size.z/2.0)+0.5
         if not p.falling: drawCylinder(Vector3(x:p.pos.x,y:0.001,z:p.pos.z),radius-(p.pos.y-groundpos)/10.0,radius-(p.pos.y-groundpos)/10.0,0.0,20,Black)
         let radius2 = sqrt(2.0)+6.0
-        if p.att_cooldown > 0: drawCylinder(Vector3(x:p.pos.x,y:0.001,z:p.pos.z),radius2,radius2,2.0,20,Color(r:255,a:floor(160*(p.att_cooldown/50)).uint8))
+        if p.att_cooldown > 0: drawCylinder(Vector3(x:p.pos.x,y:p.pos.y,z:p.pos.z),radius2,radius2,2.0,20,Color(r:255,a:floor(160*(p.att_cooldown/50)).uint8))
     for w in walls:
       drawCubeTextureRec(level_tex, Rectangle(x:0,y:8,width:16,height:8),w.pos,w.size.x,w.size.y,w.size.z,(true,true,true,true,true,true),White)
     for c in collectibles:
@@ -708,6 +712,9 @@ proc updateDrawFrame {.cdecl.} =
 
     # UI
 
+    for enemy in enemies:
+      let cubeScreenPosition = getWorldToScreen(Vector3(x:enemy.pos.x/wallSize,y:2.0,z:enemy.pos.y/wallSize), camera)
+      if enemy.hp < enemy.max_hp: drawRectangle(Vector2(x:cubeScreenPosition.x-enemy.size.x/2.0,y:cubeScreenPosition.y-8.0),Vector2(x:(enemy.hp/enemy.max_hp)*enemy.size.x,y: 8.0),Green)
     drawRectangle(Vector2(),Vector2(x:240.0,y:40.0),Gray)
     drawRectangle(Vector2(),Vector2(x:240.0*(players[0].hp/playerMaxHp),y:40.0),Green)
     drawText("HP",10,10,20,Black)
