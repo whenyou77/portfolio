@@ -17,7 +17,7 @@
 #
 # ****************************************************************************************
 
-import raylib, raymath, reasings, std/math, os, rlgl, std/strutils
+import raylib, raymath, reasings, std/math, os, rlgl, std/strutils, nim_tiled
 
 # ----------------------------------------------------------------------------------------
 # Global Variables Definition
@@ -78,8 +78,8 @@ var fadeOutLen = 0
 var transitioning = false
 var inElevator = false
 var stage = 0
-var mapSize = 20 # the map is always square
-var row = mapSize+2 # how many characters till next row in the map? (\n also counts)
+let mapSize = 20 # the map is always square
+let row = mapSize+2 # how many characters till next row in the map? (\n also counts)
 var carrotsHeld = 0 # carrots are shared
 var startingCarrots = 0 # how many carrots were held when the stage ended?
 var advance = false # switch to next stage?
@@ -230,40 +230,34 @@ proc drawCubeTextureRec(texture: Texture2D, source: Rectangle, position: Vector3
 
     setTexture(0)
 
-proc bresenhamLine(x1, y1, x2, y2: int): seq[tuple[x, y: int]] =
+proc bresenhamLine(x0, y0, x1, y1: int): seq[tuple[x, y: int]] =
+  var dx = abs(x1 - x0)
+  var dy = abs(y1 - y0)
+  var sx = if x0 < x1: 1 else: -1
+  var sy = if y0 < y1: 1 else: -1
+  var err = dx - dy
+  var x = x0
+  var y = y0
   var points: seq[tuple[x, y: int]] = @[]
-  let dx = abs(x2 - x1)
-  let dy = abs(y2 - y1)
-  var x = x1
-  var y = y1
-  let sx = if x1 > x2: -1 else: 1
-  let sy = if y1 > y2: -1 else: 1
-  if dx > dy:
-    var err = dx div 2
-    while x != x2:
-      points.add((x: x, y: y))
+
+  while true:
+    points.add((x: x, y: y))
+    if x == x1 and y == y1: break
+    let e2 = 2 * err
+    if e2 > -dy:
       err -= dy
-      if err < 0:
-        y += sy
-        err += dx
       x += sx
-  else:
-    var err = dy div 2
-    while y != y2:
-      points.add((x: x, y: y))
-      err -= dx
-      if err < 0:
-        x += sx
-        err += dy
+    if e2 < dx:
+      err += dx
       y += sy
-  points.add((x: x, y: y))
+
+  points.del(0) # ensure that the tile on which the start point is isn't included
   return points
 
 proc lineOfSight(player, enemy: (int,int), grid: string, e: Enemy): bool =
   let points = bresenhamLine(player[0], player[1], enemy[0], enemy[1])
   for point in points:
-    echo point.y*22+point.x
-    if grid[point.y*22+point.x] == '#':
+    if grid[point.y*row+point.x] == '#' or grid[point.y*22+point.x] == '/' or grid[point.y*22+point.x] == 'w':
       echo "colliding with " & $point
       return false
   return true
@@ -336,6 +330,7 @@ proc updateDrawFrame {.cdecl.} =
                 if checkCollisionCircleRec(Vector2(x:p.pos.x,y:p.pos.z),radius.float32,Rectangle(x:e.pos.x,y:e.pos.z,width:e.size.x,height:e.size.z)) and e.pos.y + e.size.y/2.0 > p.pos.y-p.size.y/2.0 and e.pos.y - e.size.y/2.0 < p.pos.y + p.size.y/2.0:
                   e.hp -= 10.0
                   e.vel = Vector3()
+                  if e.enemyType == jeopard: e.att_cooldown = 10
             if (isKeyPressed(KeyboardKey.E) or isKeyPressed(F)) and carrotsHeld > 0 and p.hp < playerMaxHp:
               carrotsHeld -= 1
               p.hp += 15.0
@@ -483,22 +478,21 @@ proc updateDrawFrame {.cdecl.} =
           if players[closest].charge_vel == Vector2():
             case e.enemyType:
             of possum: 
-              players[closest].hp -= 20.0
+              players[closest].hp -= 10.0
               e.att_cooldown = 90
             of jeopard: 
               players[closest].hp -= 40.0
-              e.att_cooldown = 150
+              e.att_cooldown = 120
             of crow: 
-              players[closest].hp -= 15.0
+              players[closest].hp -= 10.0
               e.att_cooldown = 60
-        echo floor(p.pos.x/wallSize).int
-        echo floor(p.pos.z/wallSize).int
-        echo floor(e.pos.x/wallSize).int
-        echo floor(e.pos.z/wallSize).int
-        if lineOfSight((floor(e.pos.x/wallSize).int,floor(e.pos.z/wallSize).int),(floor(p.pos.x/wallSize).int,floor(p.pos.z/wallSize).int),level,e):
+        e.vel.x = 0.0
+        e.vel.z = 0.0
+        if lineOfSight((floor((e.pos.x+wallSize/2.0)/wallSize).int,floor((e.pos.z+wallSize/2.0)/wallSize).int),(floor((p.pos.x+wallSize/2.0)/wallSize).int,floor((p.pos.z+wallSize/2.0)/wallSize).int),level,e):
           let angleToPlayer = arctan2(p.pos.z-e.pos.z,p.pos.x-e.pos.x)
           e.vel.x = velMod*angleToPlayer.cos()
           e.vel.z = velMod*angleToPlayer.sin()
+          echo e.vel
         if e.att_cooldown > 0:
           e.vel.x = 0.0
           e.vel.z = 0.0
@@ -680,7 +674,7 @@ proc updateDrawFrame {.cdecl.} =
         let radius = sqrt(c.size.x/2.0*c.size.x/2.0+c.size.z/2.0*c.size.z/2.0)+0.5
         drawCylinder(Vector3(x:c.pos.x,y:0.1,z:c.pos.z),radius-(c.pos.y-groundpos)/10.0,radius-(c.pos.y-groundpos)/10.0,0.0,20,Black)
     for e in enemies:
-      let mapIndex = level[floor((e.pos.z.float+wallSize/2.0)/wallSize).int*row+floor((e.pos.x.float+wallSize/2.0)/wallSize).int] # on which index of the map is the collectible placed on?
+      let mapIndex = level[floor((e.pos.z.float+wallSize/2.0)/wallSize).int*row+floor((e.pos.x.float+wallSize/2.0)/wallSize).int] # on which index of the map is the enemy placed on?
       if not (mapIndex == '/'):
         case e.enemyType:
         of crow: drawCube(e.pos,e.size,Black)
@@ -713,8 +707,8 @@ proc updateDrawFrame {.cdecl.} =
     # UI
 
     for enemy in enemies:
-      let cubeScreenPosition = getWorldToScreen(Vector3(x:enemy.pos.x/wallSize,y:2.0,z:enemy.pos.y/wallSize), camera)
-      if enemy.hp < enemy.max_hp: drawRectangle(Vector2(x:cubeScreenPosition.x-enemy.size.x/2.0,y:cubeScreenPosition.y-8.0),Vector2(x:(enemy.hp/enemy.max_hp)*enemy.size.x,y: 8.0),Green)
+      let cubeScreenPosition = getWorldToScreen(Vector3(x:enemy.pos.x,y:enemy.pos.y,z:enemy.pos.z), camera)
+      if enemy.hp < enemy.max_hp: drawRectangle(Vector2(x:cubeScreenPosition.x-enemy.size.x/1.5,y:cubeScreenPosition.y-8.0),Vector2(x:(enemy.hp/enemy.max_hp)*enemy.size.x*3.0,y: 8.0),Green)
     drawRectangle(Vector2(),Vector2(x:240.0,y:40.0),Gray)
     drawRectangle(Vector2(),Vector2(x:240.0*(players[0].hp/playerMaxHp),y:40.0),Green)
     drawText("HP",10,10,20,Black)
@@ -737,7 +731,7 @@ proc updateDrawFrame {.cdecl.} =
 proc main =
   # Initialization
   # --------------------------------------------------------------------------------------
-  initWindow(screenWidth, screenHeight, "raylib [core] example - basic window")
+  initWindow(screenWidth, screenHeight, "B-HOP UNDERGROUND")
   #level = loadModel(getAppDir() & "./dungeon_test.obj")
   level_tex = loadTexture(getAppDir() & "./dungeon_tileset2.png")
   level_tex.setTextureFilter(Point)
